@@ -196,6 +196,13 @@ func TestReadUsageSendsExactRequest(t *testing.T) {
 	if !reading.ObservedAt.Equal(fixedNow) {
 		t.Errorf("observed at = %v, want the injected clock instant", reading.ObservedAt)
 	}
+	quota, ok := reading.Quotas["limit_5h"]
+	if !ok || quota.UsedRatio == nil || *quota.UsedRatio != 0.25 || quota.Source != "ratio" {
+		t.Errorf("decoded quota = %+v, want modern ratio 0.25", quota)
+	}
+	if string(reading.GoodsVersion) != `"v1"` {
+		t.Errorf("goods version = %s, want raw passthrough", reading.GoodsVersion)
+	}
 	if string(reading.Raw) != body {
 		t.Errorf("raw = %s, want the exact top-level object %s", reading.Raw, body)
 	}

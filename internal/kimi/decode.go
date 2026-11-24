@@ -1,0 +1,314 @@
+package kimi
+
+import (
+	"bytes"
+	"encoding/json"
+	"math"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/acevedomiguel/kimiburn/internal/credentials"
+	"github.com/acevedomiguel/kimiburn/internal/domain"
+)
+
+const legacyRatioTolerance = 0.005
+
+var canonicalQuotaOrder = []domain.QuotaKey{
+	domain.QuotaLimit5h,
+	domain.QuotaLimit7d,
+	domain.QuotaLimitMonthTotal,
+	domain.QuotaLimitMonthCode,
+}
+
+type modernQuota struct {
+	reading      domain.QuotaReading
+	ratioPresent bool
+	ratioValid   bool
+}
+
+type legacyQuota struct {
+	reading domain.QuotaReading
+}
+
+// decodeUsage maps recognized wire representations without ever interpreting
+// unknown fields. The original object and entry objects remain available raw.
+func decodeUsage(raw json.RawMessage, observedAt time.Time) domain.UsageReading {
+	reading := domain.UsageReading{
+		ObservedAt: observedAt,
+		Quotas:     make(map[domain.QuotaKey]domain.QuotaReading),
+		Raw:        cloneRaw(raw),
+		Warnings:   make([]domain.Warning, 0),
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return reading
+	}
+	reading.GoodsVersion = cloneRaw(object["goods_version"])
+	reading.BoosterWallet = cloneRaw(object["boosterWallet"])
+
+	modern := decodeModern(object["usages"], &reading.Warnings)
+	legacy := make(map[domain.QuotaKey]legacyQuota)
+	if quota, ok := decodeLegacy(object["usage"], domain.QuotaLimit7d, &reading.Warnings); ok {
+		legacy[domain.QuotaLimit7d] = quota
+	}
+	if quota, ok := decodeLegacyWindow(object["limits"], &reading.Warnings); ok {
+		legacy[domain.QuotaLimit5h] = quota
+	}
+
+	for _, key := range canonicalQuotaOrder {
+		modernQuota, hasModern := modern[key]
+		legacyQuota, hasLegacy := legacy[key]
+		switch {
+		case hasModern && (modernQuota.ratioPresent || hasLegacy):
+			quota := modernQuota.reading
+			if hasLegacy {
+				quota.Limit = legacyQuota.reading.Limit
+				quota.Used = legacyQuota.reading.Used
+				quota.Remaining = legacyQuota.reading.Remaining
+				if quota.ResetAt == nil {
+					quota.ResetAt = legacyQuota.reading.ResetAt
+				}
+				switch {
+				case !modernQuota.ratioValid:
+					quota.UsedRatio = nil
+					quota.ConflictReason = domain.ConflictSources
+					addWarning(&reading.Warnings, "Quota consistency", string(key)+": modern ratio is unavailable; legacy counts cannot replace it")
+				case legacyQuota.reading.UsedRatio != nil && math.Abs(*quota.UsedRatio-*legacyQuota.reading.UsedRatio) > legacyRatioTolerance:
+					quota.UsedRatio = nil
+					quota.ConflictReason = domain.ConflictSources
+					addWarning(&reading.Warnings, "Quota consistency", string(key)+": modern ratio and legacy counts disagree; normalized ratio unavailable")
+				}
+			}
+			reading.Quotas[key] = quota
+		case hasLegacy:
+			reading.Quotas[key] = legacyQuota.reading
+		}
+	}
+	return reading
+}
+
+func decodeModern(raw json.RawMessage, warnings *[]domain.Warning) map[domain.QuotaKey]modernQuota {
+	result := make(map[domain.QuotaKey]modernQuota)
+	if isNull(raw) {
+		return result
+	}
+	var entries map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		addWarning(warnings, "usages", "usages is not an object; modern quotas unavailable")
+		return result
+	}
+	for _, key := range canonicalQuotaOrder {
+		entryRaw, ok := entries[string(key)]
+		if !ok || isNull(entryRaw) {
+			continue
+		}
+		var entry map[string]json.RawMessage
+		if err := json.Unmarshal(entryRaw, &entry); err != nil {
+			addWarning(warnings, string(key), "quota entry is not an object; normalized values unavailable")
+			result[key] = modernQuota{reading: domain.QuotaReading{Source: domain.SourceRatio, Raw: cloneRaw(entryRaw)}}
+			continue
+		}
+		reset, resetPresent, resetValid := resetTime(entry["reset_time"])
+		if resetPresent && !resetValid {
+			addWarning(warnings, string(key), "reset_time is not RFC3339/RFC3339Nano; normalized reset time unavailable")
+		}
+		ratioRaw, ratioReported := entry["used_ratio"]
+		if !ratioReported || isNull(ratioRaw) {
+			continue
+		}
+		quota := domain.QuotaReading{Source: domain.SourceRatio, Raw: cloneRaw(entryRaw), ResetAt: reset}
+		ratio, present, valid := finiteNumber(ratioRaw)
+		modern := modernQuota{reading: quota, ratioPresent: true}
+		switch {
+		case !present:
+			continue
+		case !valid || *ratio < 0 || *ratio > 1:
+			addWarning(warnings, string(key), "used_ratio is malformed, non-finite, or outside [0,1]; normalized ratio unavailable")
+		default:
+			quota.UsedRatio = ratio
+			modern.reading = quota
+			modern.ratioValid = true
+		}
+		result[key] = modern
+	}
+	return result
+}
+
+func decodeLegacyWindow(raw json.RawMessage, warnings *[]domain.Warning) (legacyQuota, bool) {
+	if isNull(raw) {
+		return legacyQuota{}, false
+	}
+	var entries []json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		addWarning(warnings, "limits", "limits is not an array; legacy five-hour quota unavailable")
+		return legacyQuota{}, false
+	}
+	for _, rawEntry := range entries {
+		var entry map[string]json.RawMessage
+		if err := json.Unmarshal(rawEntry, &entry); err != nil {
+			continue
+		}
+		if !exactFiveHourWindow(entry) {
+			continue
+		}
+		return decodeLegacy(rawEntry, domain.QuotaLimit5h, warnings)
+	}
+	return legacyQuota{}, false
+}
+
+func exactFiveHourWindow(entry map[string]json.RawMessage) bool {
+	var unit string
+	if err := json.Unmarshal(entry["timeUnit"], &unit); err != nil || unit != "TIME_UNIT_MINUTE" {
+		return false
+	}
+	rawDuration := entry["duration"]
+	if len(rawDuration) == 0 || bytes.HasPrefix(bytes.TrimSpace(rawDuration), []byte(`"`)) {
+		return false
+	}
+	duration, err := json.Number(string(rawDuration)).Float64()
+	return err == nil && duration == 300
+}
+
+func decodeLegacy(raw json.RawMessage, key domain.QuotaKey, warnings *[]domain.Warning) (legacyQuota, bool) {
+	if isNull(raw) {
+		return legacyQuota{}, false
+	}
+	var entry map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &entry); err != nil {
+		addWarning(warnings, string(key), "legacy quota is not an object; normalized values unavailable")
+		return legacyQuota{}, false
+	}
+	_, hasLimit := entry["limit"]
+	_, hasUsed := entry["used"]
+	_, hasRemaining := entry["remaining"]
+	_, hasReset := entry["resetTime"]
+	if !hasLimit && !hasUsed && !hasRemaining && !hasReset {
+		return legacyQuota{}, false
+	}
+
+	quota := domain.QuotaReading{Source: domain.SourceLegacyCounts, Raw: cloneRaw(raw)}
+	invalid := false
+	limit, limitPresent, limitValid := nonnegativeNumber(entry["limit"])
+	used, usedPresent, usedValid := nonnegativeNumber(entry["used"])
+	remaining, remainingPresent, remainingValid := nonnegativeNumber(entry["remaining"])
+	for _, field := range []struct {
+		name    string
+		present bool
+		valid   bool
+	}{
+		{"limit", limitPresent, limitValid},
+		{"used", usedPresent, usedValid},
+		{"remaining", remainingPresent, remainingValid},
+	} {
+		if field.present && !field.valid {
+			invalid = true
+			addWarning(warnings, string(key), field.name+" is malformed, non-finite, or negative; normalized value unavailable")
+		}
+	}
+	quota.Limit = limit
+	quota.Used = used
+	quota.Remaining = remaining
+
+	if !usedPresent && limitPresent && limitValid && remainingPresent && remainingValid {
+		derived := *limit - *remaining
+		if derived < 0 {
+			invalid = true
+			quota.Used = nil
+			addWarning(warnings, string(key), "derived used count is negative; normalized used count and ratio unavailable")
+		} else {
+			quota.Used = floatPointer(derived)
+			usedPresent = true
+		}
+	}
+
+	resetName := "resetTime"
+	reset, resetPresent, resetValid := resetTime(entry[resetName])
+	if resetPresent && !resetValid {
+		addWarning(warnings, string(key), "resetTime is not RFC3339/RFC3339Nano; normalized reset time unavailable")
+	}
+	quota.ResetAt = reset
+
+	if !invalid && quota.Limit != nil && quota.Used != nil {
+		switch {
+		case *quota.Limit > 0:
+			ratio := *quota.Used / *quota.Limit
+			if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 1 {
+				addWarning(warnings, string(key), "derived used ratio is non-finite or outside [0,1]; normalized ratio unavailable")
+			} else {
+				quota.UsedRatio = floatPointer(ratio)
+			}
+		case *quota.Used > 0:
+			addWarning(warnings, string(key), "zero limit with positive usage is invalid; normalized ratio unavailable")
+		}
+	}
+	return legacyQuota{reading: quota}, true
+}
+
+// finiteNumber distinguishes absent/null from a recognized invalid value.
+func finiteNumber(raw json.RawMessage) (value *float64, present, valid bool) {
+	if isNull(raw) {
+		return nil, false, false
+	}
+	trimmed := strings.TrimSpace(string(raw))
+	var text string
+	if strings.HasPrefix(trimmed, `"`) {
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return nil, true, false
+		}
+		text = strings.TrimSpace(text)
+	} else {
+		text = trimmed
+	}
+	parsed, err := strconv.ParseFloat(text, 64)
+	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+		return nil, true, false
+	}
+	return floatPointer(parsed), true, true
+}
+
+func nonnegativeNumber(raw json.RawMessage) (*float64, bool, bool) {
+	value, present, valid := finiteNumber(raw)
+	if !present {
+		return nil, false, false
+	}
+	if !valid || *value < 0 {
+		return nil, true, false
+	}
+	return value, true, true
+}
+
+func resetTime(raw json.RawMessage) (value *time.Time, present, valid bool) {
+	if isNull(raw) {
+		return nil, false, false
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return nil, true, false
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, text)
+	if err != nil {
+		return nil, true, false
+	}
+	return &parsed, true, true
+}
+
+func addWarning(warnings *[]domain.Warning, section, message string) {
+	*warnings = append(*warnings, domain.Warning{
+		Section: credentials.Redact(section),
+		Message: credentials.Redact(message),
+	})
+}
+
+func cloneRaw(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return nil
+	}
+	return append(json.RawMessage(nil), raw...)
+}
+
+func isNull(raw json.RawMessage) bool {
+	return len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+func floatPointer(value float64) *float64 { return &value }

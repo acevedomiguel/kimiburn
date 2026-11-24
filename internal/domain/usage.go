@@ -48,16 +48,28 @@ const (
 	SourceLegacyCounts QuotaSource = "legacy_counts"
 )
 
+// ConflictReason marks a quota whose recognized representations disagree or
+// cannot be reconciled, so downstream estimation must fail closed rather than
+// choose a winner. The empty value means no conflict was observed.
+type ConflictReason string
+
+// ConflictSources marks a quota whose modern ratio and legacy counts describe
+// the same window with a material disagreement, or a modern ratio that is
+// present but unusable while legacy counts exist. It is the stable value
+// downstream runway estimation checks to refuse a normalized result.
+const ConflictSources ConflictReason = "conflicting_sources"
+
 // QuotaReading is one quota's normalized values. A nil pointer means the
 // provider did not report that value; it never means zero.
 type QuotaReading struct {
-	Source    QuotaSource
-	UsedRatio *float64
-	Limit     *float64
-	Used      *float64
-	Remaining *float64
-	ResetAt   *time.Time
-	Raw       json.RawMessage
+	Source         QuotaSource
+	UsedRatio      *float64
+	Limit          *float64
+	Used           *float64
+	Remaining      *float64
+	ResetAt        *time.Time
+	ConflictReason ConflictReason
+	Raw            json.RawMessage
 }
 
 // Warning is a stable section name plus a human-readable message that has

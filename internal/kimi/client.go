@@ -277,11 +277,7 @@ func (c *Client) attempt(ctx context.Context) (domain.UsageReading, http.Header,
 	if err != nil {
 		return domain.UsageReading{}, header, &APIError{Endpoint: endpointPath, Kind: ErrMalformedResponse}
 	}
-	return domain.UsageReading{
-		ObservedAt: c.now(),
-		Quotas:     map[domain.QuotaKey]domain.QuotaReading{},
-		Raw:        raw,
-	}, header, nil
+	return decodeUsage(raw, c.now()), header, nil
 }
 
 // canonicalObject requires exactly one top-level JSON object and returns its
