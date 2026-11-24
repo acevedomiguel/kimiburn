@@ -113,7 +113,9 @@ func NewModel(opts Options) Model {
 	}
 	if opts.Demo && opts.Refresh == nil {
 		opts.Refresh = func(_ context.Context, request RefreshRequest) RefreshResult {
-			return RefreshResult{Generation: request.Generation, Manual: request.Manual, Snapshot: ui.SyntheticSnapshot()}
+			// The demo renders the same fixture the README screenshot shows, so
+			// `kimiburn demo` reproduces that image.
+			return RefreshResult{Generation: request.Generation, Manual: request.Manual, Snapshot: ui.SyntheticLegacySnapshot()}
 		}
 	}
 	state := ViewLoading

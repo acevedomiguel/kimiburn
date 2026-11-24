@@ -35,14 +35,22 @@ func SyntheticSnapshot() domain.Snapshot {
 	}
 }
 
-// SyntheticLegacySnapshot adds absolute seven-day request counts to the modern
-// demo. It exercises legacy count presentation without I/O.
+// SyntheticLegacySnapshot adds the Monthly Code allocation and absolute
+// seven-day request counts to the modern demo. It exercises the Code allocation
+// and legacy count panels without I/O, and it is the fixture behind
+// `kimiburn demo`.
 func SyntheticLegacySnapshot() domain.Snapshot {
 	snapshot := SyntheticSnapshot()
 	reset := snapshot.GeneratedAt.Add(48 * time.Hour)
 	usedRatio, used, limit, remaining, burn := 0.4, 40.0, 100.0, 60.0, 0.0
 	snapshot.Quotas[domain.QuotaLimit7d] = domain.QuotaReading{Source: domain.SourceLegacyCounts, UsedRatio: &usedRatio, Used: &used, Limit: &limit, Remaining: &remaining, ResetAt: &reset, Raw: json.RawMessage(`{"limit":100,"detail":40,"remaining":60}`)}
 	snapshot.Runways[domain.QuotaLimit7d] = domain.RunwayEstimate{Status: "no_consumption", BurnRatioPerSecond: &burn, BurnPercentPerHour: floatPointer(0), SampleCount: 30, WindowSeconds: 900, Confidence: "medium"}
+
+	// The Code allocation is part of the shared membership, so it resets with the
+	// monthly quota and is never added to it.
+	codeUsed := 0.2
+	codeReset := snapshot.GeneratedAt.Add(18*24*time.Hour + 6*time.Hour)
+	snapshot.Quotas[domain.QuotaLimitMonthCode] = domain.QuotaReading{Source: domain.SourceRatio, UsedRatio: &codeUsed, ResetAt: &codeReset, Raw: json.RawMessage(`{"used_ratio":0.2}`)}
 	snapshot.Raw = json.RawMessage(`{"goods_version":2,"usages":{"limit_5h":{"used_ratio":0.72,"reset_time":"2026-11-24T17:44:30Z"},"limit_month_total":{"used_ratio":0.418,"reset_time":"2026-12-12T20:32:30Z"}},"limits":[{"window":{"duration":10080,"timeUnit":"TIME_UNIT_MINUTE"},"limit":100,"detail":40,"remaining":60}],"boosterWallet":{"synthetic_example_field":null},"future_provider_field":"synthetic-passthrough-value"}`)
 	return snapshot
 }
