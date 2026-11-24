@@ -54,12 +54,32 @@ func parentDir(path string) string {
 
 // userDir prefers an explicit absolute XDG directory when the user set one,
 // and falls back to the platform-native location otherwise. XDG requires
-// absolute paths, so a relative override is invalid and ignored rather than
-// making the resolved paths depend on the process working directory. On macOS
-// the standard library ignores XDG, but users who set it expect it to win.
+// absolute paths, so a relative override is invalid: it is ignored rather than
+// making the resolved paths depend on the process working directory. The
+// standard library fallback itself rejects a relative XDG variable (on Linux
+// os.UserConfigDir errors), so the invalid value is temporarily suppressed for
+// the duration of the fallback and restored afterwards. On macOS the standard
+// library ignores XDG, but users who set it expect it to win.
 func userDir(envVar string, fallback func() (string, error)) (string, error) {
-	if v := strings.TrimSpace(os.Getenv(envVar)); v != "" && filepath.IsAbs(v) {
+	v := strings.TrimSpace(os.Getenv(envVar))
+	if v != "" && filepath.IsAbs(v) {
 		return v, nil
 	}
+
+	// A set-but-relative variable must not leak into the fallback, because the
+	// fallback may reject it. Suppress it, run the fallback, then restore the
+	// original value on every path.
+	set := false
+	if _, ok := os.LookupEnv(envVar); ok {
+		set = true
+		if err := os.Unsetenv(envVar); err != nil {
+			return "", err
+		}
+	}
+	defer func() {
+		if set {
+			_ = os.Setenv(envVar, v)
+		}
+	}()
 	return fallback()
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,39 @@ func TestPathsIgnoreRelativeXDGOverrides(t *testing.T) {
 	base, err := os.UserConfigDir()
 	if err == nil && !strings.HasPrefix(p.ConfigFile, base) {
 		t.Errorf("config file = %q, want the platform fallback under %q", p.ConfigFile, base)
+	}
+}
+
+func TestUserDirSuppressesRelativeOverrideDuringFallback(t *testing.T) {
+	// Platform-independent guard for the Linux failure mode: when the relative
+	// XDG variable is ignored, the fallback must not see it, and the original
+	// value must be restored afterwards regardless of the fallback outcome.
+	t.Setenv("XDG_CONFIG_HOME", "relative-config")
+
+	sawValue := "sentinel"
+	_, err := userDir("XDG_CONFIG_HOME", func() (string, error) {
+		if v, ok := os.LookupEnv("XDG_CONFIG_HOME"); ok {
+			sawValue = v
+		}
+		return "/fallback/config", nil
+	})
+	if err != nil {
+		t.Fatalf("userDir: %v", err)
+	}
+	if sawValue != "sentinel" {
+		t.Errorf("fallback saw XDG_CONFIG_HOME=%q, want it absent", sawValue)
+	}
+	if got := os.Getenv("XDG_CONFIG_HOME"); got != "relative-config" {
+		t.Errorf("XDG_CONFIG_HOME = %q after fallback, want the original restored", got)
+	}
+
+	// The value is restored even when the fallback itself fails.
+	fallbackErr := errors.New("fallback failed")
+	if _, err := userDir("XDG_CONFIG_HOME", func() (string, error) { return "", fallbackErr }); !errors.Is(err, fallbackErr) {
+		t.Fatalf("userDir error = %v, want %v", err, fallbackErr)
+	}
+	if got := os.Getenv("XDG_CONFIG_HOME"); got != "relative-config" {
+		t.Errorf("XDG_CONFIG_HOME = %q after failed fallback, want the original restored", got)
 	}
 }
 
