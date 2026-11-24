@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/acevedomiguel/kimiburn/compare/v1.1.3...v1.2.0) (2026-11-24)
+
+### Features
+
+* rebuild the dashboard on charm bubbles and add a project website ([#6](https://github.com/acevedomiguel/kimiburn/issues/6)) ([beb3387](https://github.com/acevedomiguel/kimiburn/commit/beb338710c227b508335491f220472ac83f07abc))
+
 ## [1.1.3](https://github.com/acevedomiguel/kimiburn/compare/v1.1.2...v1.1.3) (2026-11-24)
 
 ### Bug Fixes
