@@ -1,0 +1,30 @@
+# SDD planning scratch
+/.superpowers/
+
+# Build output
+/kimiburn
+/kimiburn.exe
+/dist/
+
+# Local credential and configuration files that must never be committed
+/token
+/token.json
+/credentials.json
+/config.local.yaml
+
+# Local cache, snapshot, and probe exports: these can contain raw API responses
+*.cache.json
+*.snapshot.json
+/snapshot.json
+/probe/
+/probe-*.json
+
+# Test and coverage artifacts
+*.test
+coverage.out
+
+# Editors and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
