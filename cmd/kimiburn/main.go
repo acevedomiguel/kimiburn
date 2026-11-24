@@ -1,9 +1,10 @@
 // Command kimiburn is a read-only terminal monitor for Kimi Code membership
-// quotas. This slice provides the CLI skeleton plus strict configuration and
-// platform paths: version, help, and `config path`/`config reset` only.
+// quotas. This slice provides the CLI skeleton, strict configuration and
+// platform paths, and one-token credential setup/logout.
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os"
 
 	"github.com/acevedomiguel/kimiburn/internal/config"
+	"github.com/acevedomiguel/kimiburn/internal/credentials"
 )
 
 // version is overridden at release time via -ldflags "-X main.version=...".
@@ -28,8 +30,13 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
+// run executes the CLI with explicit streams and production dependencies.
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return runWithDeps(args, stdin, stdout, stderr, defaultDeps())
+}
+
 // options is the parsed command line. command is one of "help", "version",
-// "config-path", "config-reset", or "" when no command was given.
+// "config-path", "config-reset", "setup", "logout", or "" when none was given.
 type options struct {
 	command    string
 	configPath string
@@ -41,10 +48,23 @@ type usageError struct{ msg string }
 
 func (e *usageError) Error() string { return e.msg }
 
-// run executes the CLI with explicit streams so tests never touch the real
-// terminal, process exit status, or user state. The help and version paths
-// return before any configuration access, and never read stdin.
-func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+// deps carries the injectable seams the CLI needs. Production builds get real
+// implementations; tests inject fakes so no test touches the keyring, the
+// network, or the real user configuration.
+type deps struct {
+	// validate checks a token with one live read. nil means "unavailable in
+	// this build", which must never be treated as success.
+	validate func(context.Context, string) error
+	// keyring is the OS secret store, or nil to force the file fallback.
+	keyring credentials.Keyring
+	// interactive reports whether stdin is a terminal.
+	interactive func(io.Reader) bool
+	// readSecret reads a secret without echoing it.
+	readSecret func(prompt string, stdin io.Reader, stdout io.Writer) (string, error)
+}
+
+// runWithDeps is the testable entry point.
+func runWithDeps(args []string, stdin io.Reader, stdout, stderr io.Writer, d deps) int {
 	opts, err := parse(args)
 	if err != nil {
 		var ue *usageError
@@ -68,11 +88,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	// `config` commands are the only ones this slice implements; they touch
-	// Kimiburn-owned paths exclusively.
 	paths, err := config.DefaultPaths()
 	if err != nil {
-		fmt.Fprintf(stderr, "kimiburn: %v\n", err)
+		fmt.Fprintf(stderr, "kimiburn: %s\n", credentials.Redact(err.Error()))
 		return exitFailure
 	}
 
@@ -85,16 +103,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, path)
 		return exitOK
 	case "config-reset":
-		path := paths.ConfigFile
-		if opts.configPath != "" {
-			path = opts.configPath
-		}
-		if err := config.WriteSample(path); err != nil {
-			fmt.Fprintf(stderr, "kimiburn: config reset: %v\n", err)
-			return exitFailure
-		}
-		fmt.Fprintf(stdout, "Wrote %s\n", path)
-		return exitOK
+		return doConfigReset(paths, opts, stdout, stderr)
+	case "setup":
+		return doSetup(paths, opts, stdin, stdout, stderr, d)
+	case "logout":
+		return doLogout(paths, opts, stdout, stderr, d)
 	}
 
 	fmt.Fprint(stderr, "kimiburn: missing command\n\n")
@@ -132,6 +145,10 @@ func parse(args []string) (options, error) {
 		opts.command = "config-path"
 	case rest[0] == "config" && len(rest) == 2 && rest[1] == "reset":
 		opts.command = "config-reset"
+	case rest[0] == "setup" && len(rest) == 1:
+		opts.command = "setup"
+	case rest[0] == "logout" && len(rest) == 1:
+		opts.command = "logout"
 	default:
 		return options{}, &usageError{msg: fmt.Sprintf("unknown command %q", joinArgs(rest))}
 	}
@@ -153,6 +170,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprint(w, "Usage:\n"+
 		"  kimiburn config path      Print the configuration file path\n"+
 		"  kimiburn config reset     Restore the sample configuration\n"+
+		"  kimiburn setup            Store the Kimi Code token\n"+
+		"  kimiburn logout           Remove locally stored credentials\n"+
 		"  kimiburn [--version] [--help]\n"+
 		"\nFlags:\n"+
 		"  --config <path>           Use an explicit configuration file\n"+
