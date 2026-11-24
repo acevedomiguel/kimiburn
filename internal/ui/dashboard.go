@@ -37,8 +37,8 @@ func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []strin
 	month, monthOK := snapshot.Quotas[domain.QuotaLimitMonthTotal]
 	five, fiveOK := snapshot.Quotas[domain.QuotaLimit5h]
 	top := joinColumns(
-		quotaPanel("Monthly membership", domain.QuotaLimitMonthTotal, month, monthOK, snapshot.Runways[domain.QuotaLimitMonthTotal], FreshnessCaption(snapshot, opts.Cached, opts.Now), leftWidth, opts.Now, opts.Styles, false),
-		quotaPanel("5-hour quota", domain.QuotaLimit5h, five, fiveOK, snapshot.Runways[domain.QuotaLimit5h], "", rightWidth, opts.Now, opts.Styles, false),
+		quotaPanel("5-hour quota", domain.QuotaLimit5h, five, fiveOK, snapshot.Runways[domain.QuotaLimit5h], "", leftWidth, opts.Now, opts.Styles, false),
+		quotaPanel("Monthly membership", domain.QuotaLimitMonthTotal, month, monthOK, snapshot.Runways[domain.QuotaLimitMonthTotal], FreshnessCaption(snapshot, opts.Cached, opts.Now), rightWidth, opts.Now, opts.Styles, false),
 	)
 	lines := append([]string{}, top...)
 
@@ -50,8 +50,10 @@ func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []strin
 			quotaPanel("7-day quota · legacy", domain.QuotaLimit7d, legacy, true, snapshot.Runways[domain.QuotaLimit7d], "", rightWidth, opts.Now, opts.Styles, false),
 		)...)
 	} else {
+		// Code allocation keeps the same half width as the panel above it, so the
+		// left column lines up at every terminal size.
 		if codeOK {
-			lines = append(lines, quotaPanel("Monthly Code allocation", domain.QuotaLimitMonthCode, code, true, snapshot.Runways[domain.QuotaLimitMonthCode], "", width, opts.Now, opts.Styles, true)...)
+			lines = append(lines, quotaPanel("Monthly Code allocation", domain.QuotaLimitMonthCode, code, true, snapshot.Runways[domain.QuotaLimitMonthCode], "", leftWidth, opts.Now, opts.Styles, true)...)
 		}
 		if legacyOK {
 			lines = append(lines, quotaPanel("7-day quota · legacy", domain.QuotaLimit7d, legacy, true, snapshot.Runways[domain.QuotaLimit7d], "", width, opts.Now, opts.Styles, false)...)
@@ -145,7 +147,7 @@ func quotaPanel(title string, key domain.QuotaKey, quota domain.QuotaReading, ok
 		rows = append(rows, leader("Requests", counts, textWidth, st))
 	}
 	if allocation {
-		rows = append(rows, "Included in monthly membership · not additional")
+		rows = append(rows, "Included in membership")
 	}
 	return panelWithCaption(title, caption, rows, width, len(rows)+2, st)
 }

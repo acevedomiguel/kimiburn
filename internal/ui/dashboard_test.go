@@ -19,7 +19,7 @@ func TestDashboardBodyShowsCoreFactsWithoutRawAdditionalData(t *testing.T) {
 	body := strings.Join(BuildDashboardBody(snapshot, DashboardOptions{Width: 100, Height: 40, Now: snapshot.GeneratedAt.Add(time.Minute), Styles: NewStyles(false)}), "\n")
 	for _, want := range []string{
 		"Monthly membership", "5-hour quota", "Monthly Code allocation", "7-day quota · legacy",
-		"58.2%", "28.0%", "Included in monthly membership · not additional",
+		"58.2%", "28.0%", "Included in membership",
 		"Beyond this reset", "2h 20m", "Requests", "40/100 used · 60 left",
 	} {
 		if !strings.Contains(body, want) {
@@ -70,5 +70,59 @@ func TestDashboardTooSmall(t *testing.T) {
 	frame := RenderDashboard(SyntheticSnapshot(), DashboardOptions{Width: 59, Height: 15, Styles: NewStyles(false)})
 	if !strings.Contains(frame, TooSmallMessage) {
 		t.Fatalf("frame=%q", frame)
+	}
+}
+
+func TestTopRowPutsFiveHourLeftOfMonthlyMembership(t *testing.T) {
+	snapshot := SyntheticLegacySnapshot()
+	body := BuildDashboardBody(snapshot, DashboardOptions{Width: 100, Height: 40, Now: snapshot.GeneratedAt, Styles: NewStyles(false)})
+	if len(body) == 0 {
+		t.Fatal("empty dashboard body")
+	}
+	top := body[0]
+	five, month := strings.Index(top, "5-hour quota"), strings.Index(top, "Monthly membership")
+	if five < 0 || month < 0 {
+		t.Fatalf("top row missing a panel: %q", top)
+	}
+	if five > month {
+		t.Errorf("5-hour quota must sit left of Monthly membership:\n%s", top)
+	}
+}
+
+func TestMonthlyCodeAllocationKeepsHalfWidth(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		width  int
+		legacy bool
+	}{
+		{"no legacy 80", 80, false},
+		{"no legacy 100", 100, false},
+		{"no legacy 140", 140, false},
+		{"with legacy 100", 100, true},
+	} {
+		snapshot := SyntheticSnapshot()
+		if tc.legacy {
+			snapshot = SyntheticLegacySnapshot()
+		}
+		snapshot.Quotas[domain.QuotaLimitMonthCode] = domain.QuotaReading{UsedRatio: floatPointer(0.2)}
+		body := BuildDashboardBody(snapshot, DashboardOptions{Width: tc.width, Height: 40, Now: snapshot.GeneratedAt, Styles: NewStyles(false)})
+
+		// leftWidth is the width of the 5-hour quota panel, which now occupies
+		// the left column of the top row.
+		want := (Classify(tc.width, 40).ContentWidth - 1) / 2
+
+		var codeLine string
+		for _, line := range body {
+			if strings.Contains(line, "Monthly Code allocation") {
+				codeLine = line
+				break
+			}
+		}
+		if codeLine == "" {
+			t.Fatalf("%s: Monthly Code allocation panel not rendered", tc.name)
+		}
+		if got := lipgloss.Width(codeLine); got != want {
+			t.Errorf("%s: Code allocation width = %d, want %d (same as the 5-hour quota panel)\n%s", tc.name, got, want, codeLine)
+		}
 	}
 }
