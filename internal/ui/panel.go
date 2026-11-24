@@ -114,78 +114,31 @@ func leaderValue(label, value string, width int, st Styles, valueStyle lipgloss.
 	return st.Label.Render(label) + " " + st.Muted.Render(strings.Repeat(boxDot, dots)) + " " + valueStyle.Render(value)
 }
 
-// meter renders a proportional bar with used and remaining percentages
-// overlaid at its left and right edges. Cell-level styles preserve the bar
-// colors without letting ANSI sequences affect its width.
-func meter(ratio float64, width int, st Styles) string {
-	if width < 1 {
-		width = 1
+// remainingMeter renders a labelled row whose proportional bar and value
+// both describe the remaining quota.
+func remainingMeter(used float64, width int, st Styles) string {
+	if used < 0 {
+		used = 0
 	}
-	if ratio < 0 {
-		ratio = 0
+	if used > 1 {
+		used = 1
 	}
-	if ratio > 1 {
-		ratio = 1
+	remaining := 1 - used
+	value := FormatPercent(&remaining)
+	const label = "Remaining"
+	barWidth := width - lipgloss.Width(label) - lipgloss.Width(value) - 2
+	if barWidth < 1 {
+		return leader(label, value, width, st)
 	}
-	fill := int(math.Round(ratio * float64(width)))
+	fill := int(math.Round(remaining * float64(barWidth)))
 	if fill < 0 {
 		fill = 0
 	}
-	if fill > width {
-		fill = width
+	if fill > barWidth {
+		fill = barWidth
 	}
-
-	const (
-		meterUsed = iota
-		meterRemaining
-		meterUsedLabel
-		meterRemainingLabel
-	)
-	cells := make([]rune, width)
-	kinds := make([]int, width)
-	for i := range cells {
-		if i < fill {
-			cells[i] = '▇'
-			kinds[i] = meterUsed
-		} else {
-			cells[i] = '░'
-			kinds[i] = meterRemaining
-		}
-	}
-	used := FormatPercent(&ratio)
-	remainingRatio := 1 - ratio
-	remaining := FormatPercent(&remainingRatio)
-	if lipgloss.Width(used)+lipgloss.Width(remaining)+1 > width {
-		return st.Value.Render(padRight(truncate(used+" "+remaining, width), width))
-	}
-	for i, r := range []rune(used) {
-		cells[i], kinds[i] = r, meterUsedLabel
-	}
-	start := width - lipgloss.Width(remaining)
-	for i, r := range []rune(remaining) {
-		cells[start+i], kinds[start+i] = r, meterRemainingLabel
-	}
-
-	var out strings.Builder
-	for start := 0; start < width; {
-		end := start + 1
-		for end < width && kinds[end] == kinds[start] {
-			end++
-		}
-		text := string(cells[start:end])
-		switch kinds[start] {
-		case meterUsed:
-			out.WriteString(st.Bar.Render(text))
-		case meterRemaining:
-			out.WriteString(st.Muted.Render(text))
-		case meterUsedLabel:
-			out.WriteString(st.Value.Render(text))
-		default:
-			out.WriteString(st.Muted.Render(text))
-		}
-		start = end
-	}
-	return out.String()
+	bar := st.Bar.Render(strings.Repeat("▇", fill)) + st.Muted.Render(strings.Repeat("░", barWidth-fill))
+	return st.Label.Render(label) + " " + bar + " " + st.Value.Render(value)
 }
 
 // joinColumns places rendered blocks side by side, one space apart, padding

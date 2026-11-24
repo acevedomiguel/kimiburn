@@ -19,7 +19,7 @@ func TestDashboardBodyShowsCoreFactsWithoutRawAdditionalData(t *testing.T) {
 	body := strings.Join(BuildDashboardBody(snapshot, DashboardOptions{Width: 100, Height: 40, Now: snapshot.GeneratedAt.Add(time.Minute), Styles: NewStyles(false)}), "\n")
 	for _, want := range []string{
 		"Monthly membership", "5-hour quota", "Monthly Code allocation", "7-day quota · legacy",
-		"41.8%", "72.0%", "Included in monthly membership · not additional",
+		"58.2%", "28.0%", "Included in monthly membership · not additional",
 		"Beyond this reset", "2h 20m", "Requests", "40/100 used · 60 left",
 	} {
 		if !strings.Contains(body, want) {

@@ -85,16 +85,18 @@ Dashboard keys: `r` refreshes, arrow keys or `j`/`k` scroll, Page Up/Page Down
 scroll a page, Home/End jump, `?` opens help, and `q` quits. A manual refresh is
 throttled to one attempt per 30 seconds. A 401/403 suspends automatic requests
 until a manual refresh succeeds. Refresh intervals below 30 seconds are
-rejected unless the value is zero.
+rejected unless the value is zero. Demo mode uses the same 30-second scheduler
+but refreshes only synthetic data and never contacts the provider.
 
 ### Panels and runway
 
 The monthly membership and 5-hour panels have priority. Monthly Code allocation
 (`limit_month_code`) appears only when reported; it is included in the monthly
 membership, not an additional allowance. Legacy 7-day data also appears only
-when reported. Used and remaining percentages sit inside each bar. The
-dashboard keeps raw provider JSON out of the way; use `--json` when you need
-the complete structured response.
+when reported. Each quota row places a Remaining label, proportional bar, and
+remaining percentage in separate columns. The dashboard keeps raw provider
+JSON out of the way; use `--json` when you need the complete structured
+response.
 
 Runway is calculated locally from successful live ratio samples. It is an
 approximation, not a server forecast. At least five samples spanning 120

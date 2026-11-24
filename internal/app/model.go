@@ -111,6 +111,11 @@ func NewModel(opts Options) Model {
 	if !opts.IntervalSet && opts.Interval == 0 {
 		opts.Interval = 30 * time.Second
 	}
+	if opts.Demo && opts.Refresh == nil {
+		opts.Refresh = func(_ context.Context, request RefreshRequest) RefreshResult {
+			return RefreshResult{Generation: request.Generation, Manual: request.Manual, Snapshot: ui.SyntheticSnapshot()}
+		}
+	}
 	state := ViewLoading
 	if opts.Snapshot.GeneratedAt.IsZero() == false {
 		state = ViewReady
@@ -149,14 +154,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case initMsg:
 		m = stateInit(m, m.now())
-		if m.demo {
-			return m, func() tea.Msg { return refreshFinishedMsg(RefreshResult{Snapshot: ui.SyntheticSnapshot()}) }
-		}
 		if m.state == ViewSetup || m.state == ViewFatal {
 			return m, nil
 		}
 		cmd, _ := m.StartAttempt(false)
-		return m, tea.Batch(cmd, m.scheduleTick(m.now()))
+		return m, cmd
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.scroll = minInt(maxInt(0, m.scroll), m.maxScroll())
@@ -208,11 +210,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 	case "r":
-		if m.demo {
-			return m, func() tea.Msg {
-				return refreshFinishedMsg(RefreshResult{Snapshot: ui.SyntheticSnapshot()})
-			}
-		}
 		cmd, _ := m.StartAttempt(true)
 		return m, cmd
 	case "?":

@@ -143,12 +143,32 @@ func TestFatalAndSetupRenderWithoutData(t *testing.T) {
 	}
 }
 
+func TestDemoConfiguresSyntheticThirtySecondRefresh(t *testing.T) {
+	m := NewModel(Options{Demo: true})
+	if m.interval != 30*time.Second {
+		t.Fatalf("demo interval=%s, want 30s", m.interval)
+	}
+	cmd, ok := m.StartAttempt(false)
+	if !ok || cmd == nil {
+		t.Fatal("demo did not start its default refresh")
+	}
+	result := cmd().(refreshFinishedMsg)
+	if result.Err != nil {
+		t.Fatalf("demo refresh error: %v", result.Err)
+	}
+	if result.Snapshot.GeneratedAt.IsZero() {
+		t.Fatal("demo refresh returned no synthetic snapshot")
+	}
+}
+
 func TestDemoManualRefreshReloadsSyntheticDataWithoutWarning(t *testing.T) {
-	m := NewModel(Options{Demo: true, Width: 100, Height: 40})
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	m := NewModel(Options{Demo: true, Width: 100, Height: 40, Now: func() time.Time { return now }})
 	updated, cmd := m.Update(m.Init()())
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
+	now = now.Add(31 * time.Second)
 	updated, cmd = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
 	m = updated.(Model)
 	if cmd == nil {

@@ -122,7 +122,7 @@ func quotaPanel(title string, key domain.QuotaKey, quota domain.QuotaReading, ok
 
 	rows := make([]string, 0, 6)
 	if validRatio(quota.UsedRatio) {
-		rows = append(rows, meter(*quota.UsedRatio, textWidth, st))
+		rows = append(rows, remainingMeter(*quota.UsedRatio, textWidth, st))
 	} else {
 		rows = append(rows, st.Muted.Render("Meter unavailable · ratio not reported or invalid"))
 	}
