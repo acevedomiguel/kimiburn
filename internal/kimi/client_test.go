@@ -870,3 +870,49 @@ func TestRetryAfterDelaySaturatesOverflow(t *testing.T) {
 		t.Fatalf("retryAfterDelay = %v, %v; want 9223372036s, true", got, ok)
 	}
 }
+
+// A positive Retry-After seconds value beyond int64 overflows ParseInt with
+// strconv.ErrRange. It is still a positive duration, so it saturates rather
+// than becoming an invalid header that retries immediately.
+func TestRetryAfterDelaySaturatesBeyondMaxInt64(t *testing.T) {
+	if got, ok := retryAfterDelay("9223372036854775808", fixedNow); !ok || got != time.Duration(math.MaxInt64) {
+		t.Fatalf("retryAfterDelay = %v, %v; want the saturated %v, true", got, ok, time.Duration(math.MaxInt64))
+	}
+	if got, ok := retryAfterDelay("99999999999999999999999999", fixedNow); !ok || got != time.Duration(math.MaxInt64) {
+		t.Fatalf("retryAfterDelay = %v, %v; want the saturated %v, true", got, ok, time.Duration(math.MaxInt64))
+	}
+}
+
+func TestRetryAfterDelayRejectsNegativeAndMalformed(t *testing.T) {
+	for _, value := range []string{"-1", "-9223372036854775809", "later", "1.5", "12s"} {
+		if got, ok := retryAfterDelay(value, fixedNow); ok {
+			t.Errorf("retryAfterDelay(%q) = %v, true; want invalid", value, got)
+		}
+	}
+}
+
+func TestReadUsageSaturatesBeyondMaxInt64RetryAfter(t *testing.T) {
+	var calls requestCounter
+	c, _, sleeps := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.add(); calls.count() == 1 {
+			w.Header().Set("Retry-After", "9223372036854775808")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		io.WriteString(w, `{"usages":{}}`)
+	}))
+	if _, err := c.ReadUsage(context.Background()); err != nil {
+		t.Fatalf("ReadUsage: %v", err)
+	}
+	got := sleeps.recorded()
+	if len(got) != 1 {
+		t.Fatalf("sleeps = %v, want exactly one delay", got)
+	}
+	if got[0] != time.Duration(math.MaxInt64) {
+		t.Fatalf("sleeps = %v, want the saturated %v", got, time.Duration(math.MaxInt64))
+	}
+	want := fixedNow.Add(time.Duration(math.MaxInt64))
+	if at := c.NextRefreshAllowedAt(); !at.Equal(want) {
+		t.Errorf("NextRefreshAllowedAt = %v, want the saturated %v", at, want)
+	}
+}

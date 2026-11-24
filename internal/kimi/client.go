@@ -394,7 +394,9 @@ func retryAfterDelay(value string, now time.Time) (time.Duration, bool) {
 	if trimmed == "" {
 		return 0, false
 	}
-	if seconds, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+	seconds, err := strconv.ParseInt(trimmed, 10, 64)
+	switch {
+	case err == nil:
 		if seconds < 0 {
 			return 0, false
 		}
@@ -402,6 +404,10 @@ func retryAfterDelay(value string, now time.Time) (time.Duration, bool) {
 			return time.Duration(math.MaxInt64), true
 		}
 		return time.Duration(seconds) * time.Second, true
+	case errors.Is(err, strconv.ErrRange) && !strings.HasPrefix(trimmed, "-"):
+		// Positive digits beyond int64 are still an enormous delay, so they
+		// saturate instead of becoming an invalid header that retries now.
+		return time.Duration(math.MaxInt64), true
 	}
 	if at, err := http.ParseTime(trimmed); err == nil {
 		d := at.Sub(now)
