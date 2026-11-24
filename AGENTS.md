@@ -64,6 +64,17 @@ Go/Charm patterns, but no Routeburn or OpenRouter domain concept carries over.
 - Commit messages are Conventional Commits; releases are derived from them, so
   subjects are lowercase and imperative.
 
+## Release automation
+
+- `.goreleaser.yaml` intentionally publishes a Homebrew **cask** to
+  `acevedomiguel/homebrew-kimiburn`, not a formula. Keep generation under
+  `homebrew_casks` and do not hand-edit the tap from this repository.
+- The tap push is skipped when `HOMEBREW_TAP_TOKEN` is empty, so releases still
+  succeed with only the default `GITHUB_TOKEN`.
+- Preserve declarative `postflight_steps`, not deprecated `postflight`. The
+  quarantine removal exists because binaries are ad-hoc signed; it is a
+  documented Gatekeeper trade-off, with signing/notarization preferred.
+
 ## Verification
 
 Run checks relevant to the changed area and report anything unavailable:
@@ -72,5 +83,8 @@ Run checks relevant to the changed area and report anything unavailable:
   and `go build ./cmd/kimiburn` before a pull request.
 - CLI/build changes: `make build` and `./kimiburn --version` without loading real
   credentials.
+- GoReleaser changes: `goreleaser check` and `goreleaser release --snapshot
+  --clean` with `HOMEBREW_TAP_TOKEN` defined-but-empty, followed by
+  `git diff --exit-code` because its hooks run `go mod tidy`.
 - Live probing is opt-in, requires an explicitly supplied token, and is never part
   of `go test`, CI, or a release snapshot.

@@ -48,3 +48,36 @@ changelog:
 
 release:
   prerelease: auto
+
+# Homebrew formulas are deprecated in GoReleaser v2.10+; casks are the supported
+# path. The tap push is skipped when HOMEBREW_TAP_TOKEN is empty, so a plain
+# release works with only the default GITHUB_TOKEN.
+homebrew_casks:
+  - name: kimiburn
+    ids:
+      - kimiburn
+    binaries:
+      - kimiburn
+    directory: Casks
+    homepage: https://github.com/acevedomiguel/kimiburn
+    description: Read-only terminal monitor for Kimi Code membership quotas
+    repository:
+      owner: acevedomiguel
+      name: homebrew-kimiburn
+      branch: main
+    commit_msg_template: "chore: update kimiburn to {{ .Tag }}"
+    skip_upload: "{{ if not .Env.HOMEBREW_TAP_TOKEN }}true{{ end }}"
+    # Kimiburn has no Apple Developer certificate, so the binary is only
+    # ad-hoc signed. macOS quarantines the download and Gatekeeper kills the
+    # unsigned binary on first run. Clear the quarantine flag after staging so
+    # `kimiburn` works straight after `brew install --cask`.
+    #
+    # This uses Homebrew's declarative install-steps DSL via GoReleaser's
+    # `hooks`, which renders `postflight_steps`. The legacy `postflight` stanza
+    # is deprecated and makes every `brew` command print a warning.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/kimiburn"]
+          end

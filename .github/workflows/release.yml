@@ -50,6 +50,9 @@ jobs:
           version: "~> v2"
           install-only: true
       - name: Validate release configuration
+        env:
+          # Defined-but-empty so the tap template resolves during a dry run.
+          HOMEBREW_TAP_TOKEN: ""
         run: |
           goreleaser check
           goreleaser release --snapshot --clean
@@ -58,7 +61,12 @@ jobs:
         id: semantic
         run: ./node_modules/.bin/semantic-release
         env:
+          # The workflow's own token is enough to tag, publish the release and
+          # push the cask. The tap push needs HOMEBREW_TAP_TOKEN, which is
+          # only set when a tap token secret exists; without it GoReleaser
+          # skips the tap upload and the release still succeeds.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           GIT_AUTHOR_NAME: kimiburn-release-bot
           GIT_AUTHOR_EMAIL: kimiburn-release-bot@users.noreply.github.com
           GIT_COMMITTER_NAME: kimiburn-release-bot
@@ -77,6 +85,54 @@ jobs:
               echo 'No qualifying commits since the last release; nothing published.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  verify-homebrew:
+    needs: release
+    if: needs.release.outputs.version != ''
+    runs-on: macos-latest
+    env:
+      EXPECTED_VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - name: Install and test published cask
+        run: |
+          set -euo pipefail
+          brew tap acevedomiguel/kimiburn
+          # The tap is third-party, so Homebrew refuses to load the cask until it
+          # is trusted explicitly.
+          brew trust --tap acevedomiguel/kimiburn
+
+          tap="$(brew --repository acevedomiguel/kimiburn)"
+          cask="$tap/Casks/kimiburn.rb"
+          tap_version=""
+
+          # A freshly published cask can take a short time to propagate. Refresh
+          # only this tap and wait for the version this workflow just released;
+          # never install an older cask and call that a successful verification.
+          for attempt in {1..18}; do
+            git -C "$tap" pull --ff-only origin main
+            tap_version="$(sed -nE 's/^[[:space:]]*version "([^"]+)".*/\1/p' "$cask" | head -1)"
+            if [ "$tap_version" = "${EXPECTED_VERSION}" ]; then
+              break
+            fi
+            echo "Waiting for Kimiburn ${EXPECTED_VERSION}; tap currently has ${tap_version:-unknown} (${attempt}/18)"
+            if [ "$attempt" -lt 18 ]; then
+              sleep 10
+            fi
+          done
+
+          if [ "$tap_version" != "${EXPECTED_VERSION}" ]; then
+            echo "::error file=Casks/kimiburn.rb::timed out waiting for tap version ${EXPECTED_VERSION}; found ${tap_version:-unknown}"
+            exit 1
+          fi
+
+          brew install --cask kimiburn
+          kimiburn --version | grep -F "kimiburn version ${EXPECTED_VERSION}"
+
+          # The cask must not fall back to the deprecated `postflight` stanza.
+          if grep -qE '^\s*postflight do' "$cask"; then
+            echo "::error file=Casks/kimiburn.rb::cask still uses the deprecated postflight stanza"
+            exit 1
+          fi
 
   verify-archives:
     needs: release

@@ -25,6 +25,32 @@ membership quota; the two are never added together.
 
 ## Install
 
+### Homebrew (macOS and Linux)
+
+```bash
+brew tap acevedomiguel/kimiburn
+brew install --cask kimiburn
+kimiburn --version
+```
+
+Upgrades arrive through the same tap:
+
+```bash
+brew update
+brew upgrade --cask kimiburn
+```
+
+The cask downloads a prebuilt binary rather than compiling from source. That
+binary is not notarized by Apple, so the cask clears the macOS quarantine flag
+after staging; without that step Gatekeeper would kill the binary on first run.
+The tap is a third-party tap, so Homebrew asks you to trust it once:
+
+```bash
+brew trust acevedomiguel/kimiburn
+```
+
+### Archives
+
 Download an archive for your platform from GitHub Releases once the first
 release is published. Archives contain the binary, this README, and the LICENSE;
 `checksums.txt` contains SHA-256 checksums. Linux and macOS use `.tar.gz`;
@@ -165,8 +191,9 @@ On platforms where POSIX permissions are enforced, private directories are
 `0700` and token/cache files are `0600`. Windows uses the inherited user-profile
 ACL rather than POSIX permission bits.
 
-To uninstall, remove the downloaded binary, run `kimiburn logout`, and delete
-the config and cache directories shown above. No website, Homebrew tap, OAuth
+To uninstall, remove the downloaded binary (or run `brew uninstall --cask
+kimiburn` for a Homebrew install), run `kimiburn logout`, and delete
+the config and cache directories shown above. No website, OAuth
 flow, hosted service, or Open Platform integration is currently provided.
 
 ## API stability and limitations
