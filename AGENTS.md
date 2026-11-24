@@ -64,6 +64,17 @@ Go/Charm patterns, but no Routeburn or OpenRouter domain concept carries over.
 - Commit messages are Conventional Commits; releases are derived from them, so
   subjects are lowercase and imperative.
 
+## Git workflow
+
+- ALWAYS work in a dedicated git worktree on a feature branch; never edit or
+  commit directly on `main` in the primary checkout. Create worktrees with
+  `git worktree add .worktrees/<branch> -b <branch>` and remove them after
+  merging.
+- Branch names follow Conventional Commit types, e.g. `feat/...`, `fix/...`,
+  `docs/...`.
+- Land changes through a squash-merged pull request; the PR title is the
+  release commit subject, so keep it lowercase and imperative.
+
 ## Release automation
 
 - `.goreleaser.yaml` intentionally publishes a Homebrew **cask** to
