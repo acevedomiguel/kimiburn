@@ -23,6 +23,7 @@ const (
 // Sentinel errors surfaced by the credential store.
 var (
 	ErrKeyringUnavailable  = errors.New("credentials: the OS keyring is unavailable")
+	ErrKeyringNotFound     = errors.New("credentials: the keyring holds no Kimiburn entry")
 	ErrInsecurePermissions = errors.New("credentials: the token file must be readable only by its owner (0600)")
 	ErrEmptyToken          = errors.New("credentials: refusing to store an empty token")
 	ErrNoTokenFile         = errors.New("credentials: no token file path is configured")
@@ -124,8 +125,11 @@ func (s *Store) Logout(ctx context.Context) error {
 
 	var failures []error
 	if s.keyringEnabled {
+		// Not-found means there is nothing to remove, which is the expected
+		// state. Any other failure means a stored credential may survive, so it
+		// is reported instead of being reported as success.
 		err := s.keyring.Delete(ServiceName, AccountName)
-		if err != nil && !errors.Is(err, ErrKeyringUnavailable) {
+		if err != nil && !errors.Is(err, ErrKeyringNotFound) {
 			failures = append(failures, fmt.Errorf("credentials: remove keyring entry: %w", err))
 		}
 	}

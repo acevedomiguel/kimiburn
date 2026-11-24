@@ -36,13 +36,15 @@ func (osKeyring) Delete(service, user string) error {
 }
 
 // mapKeyringError normalises the library's sentinels into our own so callers
-// can branch on a stable set of errors regardless of platform.
+// can branch on a stable set of errors regardless of platform. A missing entry
+// stays distinct from an unreachable keyring: logout treats the former as
+// "nothing to remove" and the latter as a real failure.
 func mapKeyringError(err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, keyring.ErrNotFound) {
-		return ErrKeyringUnavailable
+		return ErrKeyringNotFound
 	}
 	return errors.Join(ErrKeyringUnavailable, err)
 }

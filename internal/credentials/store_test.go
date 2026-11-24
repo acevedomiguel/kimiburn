@@ -23,7 +23,7 @@ func (f *fakeKeyring) Get(service, user string) (string, error) {
 	}
 	v, ok := f.values[service+"/"+user]
 	if !ok {
-		return "", ErrKeyringUnavailable
+		return "", ErrKeyringNotFound
 	}
 	return v, nil
 }
@@ -40,7 +40,11 @@ func (f *fakeKeyring) Delete(service, user string) error {
 	if f.fail {
 		return ErrKeyringUnavailable
 	}
-	delete(f.values, service+"/"+user)
+	key := service + "/" + user
+	if _, ok := f.values[key]; !ok {
+		return ErrKeyringNotFound
+	}
+	delete(f.values, key)
 	return nil
 }
 
@@ -180,19 +184,24 @@ func TestSaveFallsBackToFileWhenKeyringUnavailable(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 	path := filepath.Join(dir, "token")
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat fallback file: %v", err)
-	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("fallback mode = %o, want 0600", perm)
-	}
-	if dirInfo, err := os.Stat(dir); err != nil || dirInfo.Mode().Perm() != 0o700 {
-		t.Errorf("fallback directory mode = %v (err %v), want 0700", dirInfo.Mode().Perm(), err)
-	}
 	raw, err := os.ReadFile(path)
 	if err != nil || string(raw) != "new-token" {
 		t.Errorf("fallback contents = %q err=%v", raw, err)
+	}
+	// Windows synthesises file modes, so POSIX bits are asserted only where the
+	// OS actually enforces them; there the 0700 directory carries the
+	// protection instead.
+	if PermissionsAreEnforced {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat fallback file: %v", err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("fallback mode = %o, want 0600", perm)
+		}
+		if dirInfo, err := os.Stat(dir); err != nil || dirInfo.Mode().Perm() != 0o700 {
+			t.Errorf("fallback directory mode = %v (err %v), want 0700", dirInfo.Mode().Perm(), err)
+		}
 	}
 }
 
@@ -223,6 +232,9 @@ func TestSaveRejectsEmptyToken(t *testing.T) {
 }
 
 func TestReadFileRefusesGroupOrWorldReadableToken(t *testing.T) {
+	if !PermissionsAreEnforced {
+		t.Skip("POSIX permission bits are not enforced on this platform")
+	}
 	kr := newFakeKeyring()
 	kr.fail = true
 	s, dir := newStore(t, kr)
@@ -249,6 +261,9 @@ func TestReadFileRefusesDirectory(t *testing.T) {
 }
 
 func TestSaveTightensAnExistingLooseFile(t *testing.T) {
+	if !PermissionsAreEnforced {
+		t.Skip("POSIX permission bits are not enforced on this platform")
+	}
 	kr := newFakeKeyring()
 	kr.fail = true
 	s, dir := newStore(t, kr)
@@ -307,10 +322,32 @@ func TestLogoutRemovesOnlyKimiburnCredentialsAndKeepsCache(t *testing.T) {
 	}
 }
 
-func TestLogoutIsIdempotentWhenNothingIsStored(t *testing.T) {
+// A keyring with no entry reports not-found, which is the expected "nothing to
+// remove" state and must not fail logout.
+func TestLogoutSucceedsWhenTheKeyringHasNoEntry(t *testing.T) {
 	s, _ := newStore(t, newFakeKeyring())
 	if err := s.Logout(context.Background()); err != nil {
 		t.Fatalf("Logout with nothing stored: %v", err)
+	}
+}
+
+// A keyring that cannot be reached is a genuine failure: logout must report it
+// while still removing the fallback file rather than silently claiming success.
+func TestLogoutReportsUnavailableKeyringButRemovesFile(t *testing.T) {
+	kr := newFakeKeyring()
+	kr.fail = true
+	s, dir := newStore(t, kr)
+	tokenPath := filepath.Join(dir, "token")
+	if err := os.WriteFile(tokenPath, []byte("file-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := s.Logout(context.Background())
+	if !errors.Is(err, ErrKeyringUnavailable) {
+		t.Fatalf("Logout err = %v, want ErrKeyringUnavailable", err)
+	}
+	if _, statErr := os.Stat(tokenPath); !os.IsNotExist(statErr) {
+		t.Errorf("logout must still remove the fallback file: %v", statErr)
 	}
 }
 

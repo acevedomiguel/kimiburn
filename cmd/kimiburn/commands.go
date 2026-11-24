@@ -53,6 +53,14 @@ func resolveConfig(paths config.Paths, opts options) (config.Config, error) {
 	return config.Load(configPathsFor(paths, opts), environment())
 }
 
+// earlyRedact scrubs a diagnostic produced before the credential store exists.
+// The environment token is the only configured secret already known there, so
+// it is added to the generic shapes; this keeps an invalid configuration value
+// that happens to equal the token from echoing it back.
+func earlyRedact(s string) string {
+	return credentials.NewRedactor(os.Getenv(credentials.EnvToken)).Redact(s)
+}
+
 // storeFor builds the credential store for the resolved paths. Only Kimiburn's
 // own keyring service and fallback file are ever referenced.
 func storeFor(paths config.Paths, opts options, d deps) (*credentials.Store, error) {
@@ -78,7 +86,7 @@ func doConfigReset(paths config.Paths, opts options, stdout, stderr io.Writer) i
 		path = opts.configPath
 	}
 	if err := config.WriteSample(path); err != nil {
-		fmt.Fprintf(stderr, "kimiburn: config reset: %s\n", credentials.Redact(err.Error()))
+		fmt.Fprintf(stderr, "kimiburn: config reset: %s\n", earlyRedact(err.Error()))
 		return exitFailure
 	}
 	fmt.Fprintf(stdout, "Wrote %s\n", path)
@@ -90,11 +98,11 @@ func doConfigReset(paths config.Paths, opts options, stdout, stderr io.Writer) i
 func doLogout(paths config.Paths, opts options, stdout, stderr io.Writer, d deps) int {
 	store, err := storeFor(paths, opts, d)
 	if err != nil {
-		fmt.Fprintf(stderr, "kimiburn: logout: %s\n", credentials.Redact(err.Error()))
+		fmt.Fprintf(stderr, "kimiburn: logout: %s\n", earlyRedact(err.Error()))
 		return exitFailure
 	}
 	if err := store.Logout(context.Background()); err != nil {
-		fmt.Fprintf(stderr, "kimiburn: logout: %s\n", credentials.Redact(err.Error()))
+		fmt.Fprintf(stderr, "kimiburn: logout: %s\n", earlyRedact(err.Error()))
 		return exitFailure
 	}
 	fmt.Fprintln(stdout, "Local Kimiburn credentials removed.")

@@ -40,11 +40,11 @@ func readSecretNoEcho(prompt string, stdin io.Reader, stdout io.Writer) (string,
 	return strings.TrimSpace(string(raw)), nil
 }
 
-// setupWelcome explains Kimiburn's boundaries before the token is requested.
+// setupWelcome states Kimiburn's boundaries before the token is requested.
 func setupWelcome() string {
-	return "Kimiburn\n\n" +
-		"A read-only terminal monitor for Kimi Code membership quotas.\n" +
-		"Kimiburn never sends inference requests and never changes your quota.\n" +
+	return "Kimiburn is an independent, read-only terminal monitor for Kimi Code\n" +
+		"membership quotas. It is not affiliated with, and is not an official client of,\n" +
+		"Kimi. Kimiburn never sends inference requests and never changes your quota.\n" +
 		"It stores exactly one token, used only for the Kimi Code usage endpoint.\n\n"
 }
 
@@ -54,7 +54,7 @@ func doSetup(paths config.Paths, opts options, stdin io.Reader, stdout, stderr i
 	fmt.Fprint(stdout, setupWelcome())
 	store, err := storeFor(paths, opts, d)
 	if err != nil {
-		fmt.Fprintf(stderr, "kimiburn: setup: %s\n", credentials.Redact(err.Error()))
+		fmt.Fprintf(stderr, "kimiburn: setup: %s\n", earlyRedact(err.Error()))
 		return exitFailure
 	}
 
@@ -76,8 +76,9 @@ func doSetup(paths config.Paths, opts options, stdin io.Reader, stdout, stderr i
 		return exitCredentials
 	}
 
-	// Redact the entered token from everything this command can print.
-	redactor := credentials.NewRedactor(token)
+	// Redact the entered token, plus any environment token, from everything
+	// this command can print.
+	redactor := credentials.NewRedactor(store.EnvironmentToken(), token)
 
 	if d.validate == nil {
 		fmt.Fprintln(stderr, "kimiburn: token validation is unavailable in this build; nothing was saved.")
@@ -116,7 +117,7 @@ func readSetupToken(stdin io.Reader, stdout, stderr io.Writer, d deps) (string, 
 	if d.interactive(stdin) {
 		token, err := d.readSecret("Kimi Code token: ", stdin, stdout)
 		if err != nil {
-			fmt.Fprintf(stderr, "kimiburn: %s\n", credentials.Redact(err.Error()))
+			fmt.Fprintf(stderr, "kimiburn: %s\n", earlyRedact(err.Error()))
 			return "", exitFailure
 		}
 		return strings.TrimSpace(token), exitOK
@@ -132,7 +133,7 @@ func readSetupToken(stdin io.Reader, stdout, stderr io.Writer, d deps) (string, 
 	}
 	fmt.Fprintln(stdout)
 	if err := scanner.Err(); err != nil && err != io.EOF {
-		fmt.Fprintf(stderr, "kimiburn: %s\n", credentials.Redact(err.Error()))
+		fmt.Fprintf(stderr, "kimiburn: %s\n", earlyRedact(err.Error()))
 		return "", exitFailure
 	}
 	return token, exitOK

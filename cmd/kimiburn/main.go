@@ -90,7 +90,7 @@ func runWithDeps(args []string, stdin io.Reader, stdout, stderr io.Writer, d dep
 
 	paths, err := config.DefaultPaths()
 	if err != nil {
-		fmt.Fprintf(stderr, "kimiburn: %s\n", credentials.Redact(err.Error()))
+		fmt.Fprintf(stderr, "kimiburn: %s\n", earlyRedact(err.Error()))
 		return exitFailure
 	}
 

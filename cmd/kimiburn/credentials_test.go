@@ -27,7 +27,7 @@ func (k *cliKeyring) Get(service, user string) (string, error) {
 	}
 	v, ok := k.values[service+"/"+user]
 	if !ok {
-		return "", credentials.ErrKeyringUnavailable
+		return "", credentials.ErrKeyringNotFound
 	}
 	return v, nil
 }
@@ -44,7 +44,11 @@ func (k *cliKeyring) Delete(service, user string) error {
 	if k.fail {
 		return credentials.ErrKeyringUnavailable
 	}
-	delete(k.values, service+"/"+user)
+	key := service + "/" + user
+	if _, ok := k.values[key]; !ok {
+		return credentials.ErrKeyringNotFound
+	}
+	delete(k.values, key)
 	return nil
 }
 
@@ -79,6 +83,10 @@ func runWith(args []string, stdin io.Reader, d deps) (int, string, string) {
 }
 
 const cliToken = "km_cli_synthetic_abcdef"
+
+// cliExactToken has no sk-like shape, so only a redactor that knows the exact
+// configured value can scrub it.
+const cliExactToken = "km_exact_synthetic_0123456789abcdef"
 
 func TestSetupNonInteractiveStoresValidatedToken(t *testing.T) {
 	configDir := setupEnv(t)
@@ -191,25 +199,35 @@ func TestSetupFallsBackToRestrictedFileWhenKeyringDisabled(t *testing.T) {
 		t.Fatalf("exit = %d, want %d (stderr=%q)", code, exitOK, stderr)
 	}
 	path := filepath.Join(configDir, "token")
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("fallback file: %v", err)
+	if raw, err := os.ReadFile(path); err != nil || strings.TrimSpace(string(raw)) != cliToken {
+		t.Errorf("fallback contents = %q err=%v", raw, err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("token file mode = %o, want 0600", perm)
-	}
-	dirInfo, err := os.Stat(configDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if perm := dirInfo.Mode().Perm(); perm != 0o700 {
-		t.Errorf("config dir mode = %o, want 0700", perm)
+	// Windows synthesises file modes, so the POSIX bits are asserted only where
+	// the OS enforces them; there the 0700 directory carries the protection.
+	if credentials.PermissionsAreEnforced {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("fallback file: %v", err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("token file mode = %o, want 0600", perm)
+		}
+		dirInfo, err := os.Stat(configDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if perm := dirInfo.Mode().Perm(); perm != 0o700 {
+			t.Errorf("config dir mode = %o, want 0700", perm)
+		}
 	}
 }
 
 // A pre-existing group/world-readable fallback file must be refused before it
 // is read, so a loose token never becomes usable.
 func TestResolutionRefusesLooseTokenFileBeforeReading(t *testing.T) {
+	if !credentials.PermissionsAreEnforced {
+		t.Skip("POSIX permission bits are not enforced on this platform")
+	}
 	configDir := setupEnv(t)
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -292,7 +310,12 @@ func TestLogoutRemovesOnlyKimiburnCredentials(t *testing.T) {
 	if err := os.WriteFile(tokenPath, []byte("file-token"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cachePath := filepath.Join(filepath.Dir(configDir), "cache", "state.json")
+	// Assert against the real resolved cache location, not a guess.
+	paths, err := config.DefaultPaths()
+	if err != nil {
+		t.Fatalf("DefaultPaths: %v", err)
+	}
+	cachePath := paths.CacheFile
 	if err := os.MkdirAll(filepath.Dir(cachePath), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -326,9 +349,10 @@ func TestLogoutRemovesOnlyKimiburnCredentials(t *testing.T) {
 	}
 }
 
-// An unavailable keyring is not a logout failure: the fallback file is still
-// removed and logout reports success.
-func TestLogoutSucceedsWhenKeyringIsUnavailable(t *testing.T) {
+// An unreachable keyring must not be reported as success: a stored entry may
+// survive. Logout still removes the fallback file, and the diagnostic is a
+// platform message rather than a secret.
+func TestLogoutReportsUnavailableKeyringButStillRemovesFile(t *testing.T) {
 	configDir := setupEnv(t)
 	kr := newCLIKeyring()
 	kr.fail = true
@@ -341,11 +365,22 @@ func TestLogoutSucceedsWhenKeyringIsUnavailable(t *testing.T) {
 	}
 	d := testDeps(func(context.Context, string) error { return nil }, kr)
 	code, _, stderr := runWith([]string{"logout"}, errorReader{}, d)
-	if code != exitOK {
-		t.Fatalf("exit = %d, want %d (stderr=%q)", code, exitOK, stderr)
+	if code != exitFailure {
+		t.Fatalf("exit = %d, want %d (stderr=%q)", code, exitFailure, stderr)
 	}
 	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
-		t.Errorf("logout must remove the fallback file even without a keyring: %v", err)
+		t.Errorf("logout must remove the fallback file even when the keyring fails: %v", err)
+	}
+}
+
+// A keyring with no Kimiburn entry is the ordinary "nothing to remove" state
+// and must exit successfully.
+func TestLogoutSucceedsWhenKimiburnHasNoKeyringEntry(t *testing.T) {
+	setupEnv(t)
+	d := testDeps(func(context.Context, string) error { return nil }, newCLIKeyring())
+	code, _, stderr := runWith([]string{"logout"}, errorReader{}, d)
+	if code != exitOK {
+		t.Fatalf("exit = %d, want %d (stderr=%q)", code, exitOK, stderr)
 	}
 }
 
@@ -363,6 +398,61 @@ func TestLogoutFailureDiagnosticIsRedacted(t *testing.T) {
 	}
 	if strings.Contains(stderr, "sk-directorytoken") {
 		t.Errorf("logout failure leaked a secret-like path: %q", stderr)
+	}
+}
+
+// The exact configured token must never survive an early configuration error.
+// A non-sk shape proves the code cannot lean on the generic pattern alone.
+func TestSetupEarlyConfigErrorRedactsExactEnvironmentToken(t *testing.T) {
+	configDir := setupEnv(t)
+	// The invalid base_url is itself the exact environment token, so a
+	// generic-only redactor would echo it back in the config diagnostic.
+	t.Setenv("KIMIBURN_BASE_URL", cliExactToken)
+	t.Setenv(credentials.EnvToken, cliExactToken)
+	kr := newCLIKeyring()
+	d := testDeps(func(context.Context, string) error {
+		t.Error("setup must not validate when configuration is invalid")
+		return nil
+	}, kr)
+
+	code, stdout, stderr := runWith([]string{"setup"}, strings.NewReader(cliToken+"\n"), d)
+	if code == exitOK {
+		t.Fatalf("invalid configuration must not succeed (stderr=%q)", stderr)
+	}
+	combined := stdout + stderr
+	if strings.Contains(combined, cliExactToken) {
+		t.Errorf("setup leaked the exact environment token: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if len(kr.values) != 0 {
+		t.Errorf("invalid configuration must store nothing: %v", kr.values)
+	}
+	if entries, err := os.ReadDir(configDir); err == nil && len(entries) != 0 {
+		t.Errorf("invalid configuration must not write %s: %v", configDir, entries)
+	}
+}
+
+// Logout's early configuration error path has the same obligation.
+func TestLogoutEarlyConfigErrorRedactsExactEnvironmentToken(t *testing.T) {
+	setupEnv(t)
+	t.Setenv("KIMIBURN_BASE_URL", cliExactToken)
+	t.Setenv(credentials.EnvToken, cliExactToken)
+	d := testDeps(func(context.Context, string) error { return nil }, newCLIKeyring())
+
+	code, stdout, stderr := runWith([]string{"logout"}, errorReader{}, d)
+	if code == exitOK {
+		t.Fatalf("invalid configuration must not report success (stderr=%q)", stderr)
+	}
+	if combined := stdout + stderr; strings.Contains(combined, cliExactToken) {
+		t.Errorf("logout leaked the exact environment token: %q", combined)
+	}
+}
+
+func TestSetupWelcomeStatesKimiburnIsIndependentAndReadOnly(t *testing.T) {
+	welcome := strings.ToLower(setupWelcome())
+	for _, want := range []string{"independent", "read-only", "never sends inference requests"} {
+		if !strings.Contains(welcome, want) {
+			t.Errorf("setup welcome must state %q:\n%s", want, setupWelcome())
+		}
 	}
 }
 
