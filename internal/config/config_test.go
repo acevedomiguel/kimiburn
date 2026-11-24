@@ -70,10 +70,38 @@ func TestValidateRejectsUnsupportedValues(t *testing.T) {
 }
 
 func TestValidateAcceptsBothAllowedBases(t *testing.T) {
-	for _, base := range []string{DefaultBaseURL, OverseasBaseURL, DefaultBaseURL + "/", OverseasBaseURL + "/"} {
+	for _, base := range []string{DefaultBaseURL, OverseasBaseURL} {
 		cfg := Config{Version: 1, RefreshInterval: 30 * time.Second, BaseURL: base, Theme: "auto", Color: "auto"}
 		if err := cfg.Validate(); err != nil {
 			t.Errorf("base %q: unexpected error %v", base, err)
+		}
+	}
+}
+
+// TestAllowedBaseURLsAreExact matches the contract's "exactly these two"
+// requirement: only the two literal bases pass, and every slash-suffixed or
+// similarly-spelled variant is rejected rather than silently canonicalized.
+func TestAllowedBaseURLsAreExact(t *testing.T) {
+	accepted := map[string]bool{
+		DefaultBaseURL:  true,
+		OverseasBaseURL: true,
+
+		DefaultBaseURL + "/":    false,
+		DefaultBaseURL + "//":   false,
+		DefaultBaseURL + "///":  false,
+		OverseasBaseURL + "/":   false,
+		OverseasBaseURL + "///": false,
+		" " + DefaultBaseURL:    false,
+		DefaultBaseURL + " ":    false,
+		DefaultBaseURL + "/x":   false,
+	}
+	for base, want := range accepted {
+		if got := IsAllowedBaseURL(base); got != want {
+			t.Errorf("IsAllowedBaseURL(%q) = %v, want %v", base, got, want)
+		}
+		cfg := Config{Version: 1, RefreshInterval: 30 * time.Second, BaseURL: base, Theme: "auto", Color: "auto"}
+		if err := cfg.Validate(); (err == nil) != want {
+			t.Errorf("Validate(base %q) error = %v, want nil=%v", base, err, want)
 		}
 	}
 }
@@ -119,6 +147,29 @@ func TestTokenKeyIsAnUnknownField(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "token") {
 		t.Errorf("error should name the offending key: %v", err)
+	}
+}
+
+func TestLoadRejectsAdditionalYAMLDocuments(t *testing.T) {
+	// Strict YAML must reject a second document instead of silently decoding
+	// the first and ignoring the rest, which could hide unknown keys or an
+	// accidental secret.
+	cases := map[string]string{
+		"unknown key in second doc": "version: 1\n---\nsurprise: true\n",
+		"empty trailing doc":        "version: 1\n---\n",
+		"second settings doc":       "version: 1\n---\nrefresh_interval: 90s\n",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.yaml")
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Load([]string{path}, nil); err == nil {
+				t.Fatalf("expected an error for multiple YAML documents:\n%s", body)
+			}
+		})
 	}
 }
 
@@ -292,13 +343,9 @@ func TestUnreadableConfigPathIsReported(t *testing.T) {
 	}
 }
 
-func TestBaseURLIsCanonicalized(t *testing.T) {
-	cfg, err := Load(nil, map[string]string{"KIMIBURN_BASE_URL": OverseasBaseURL + "///"})
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.BaseURL != OverseasBaseURL {
-		t.Errorf("base url = %q, want canonical %q", cfg.BaseURL, OverseasBaseURL)
+func TestSlashSuffixedBaseURLIsRejected(t *testing.T) {
+	if _, err := Load(nil, map[string]string{"KIMIBURN_BASE_URL": OverseasBaseURL + "///"}); err == nil {
+		t.Fatal("expected a trailing-slash base to be rejected, not canonicalized")
 	}
 }
 

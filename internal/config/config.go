@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -84,17 +85,14 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// IsAllowedBaseURL reports whether base is one of the two accepted HTTPS bases
-// after trailing slashes are trimmed. Arbitrary hosts, plain HTTP, and the
-// Moonshot Open Platform or OpenRouter APIs are never accepted in production
-// configuration; tests inject a loopback URL through client options instead.
+// IsAllowedBaseURL reports whether base is exactly one of the two accepted
+// HTTPS bases. It compares the supplied string directly, so slash-suffixed or
+// otherwise-spelled variants are rejected rather than canonicalized. Arbitrary
+// hosts, plain HTTP, and the Moonshot Open Platform or OpenRouter APIs are never
+// accepted in production configuration; tests inject a loopback URL through
+// client options instead.
 func IsAllowedBaseURL(base string) bool {
-	switch strings.TrimRight(base, "/") {
-	case DefaultBaseURL, OverseasBaseURL:
-		return true
-	default:
-		return false
-	}
+	return base == DefaultBaseURL || base == OverseasBaseURL
 }
 
 // AutoRefreshEnabled reports whether the scheduler should poll on a timer.
@@ -134,7 +132,6 @@ func Load(paths []string, env map[string]string, flags ...Overrides) (Config, er
 		}
 	}
 
-	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -154,6 +151,13 @@ func mergeFile(cfg *Config, path string) error {
 	decoder.KnownFields(true)
 	if err := decoder.Decode(cfg); err != nil {
 		return fmt.Errorf("config: parse %s: %w", path, err)
+	}
+
+	// Strict YAML is a single document. A second document is rejected rather
+	// than silently ignored, so unknown keys (or worse) cannot hide after `---`.
+	var extra Config
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("config: parse %s: multiple YAML documents are not allowed", path)
 	}
 	return nil
 }
