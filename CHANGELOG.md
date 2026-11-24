@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/acevedomiguel/kimiburn/compare/v1.0.0...v1.1.0) (2026-11-24)
+
+### Features
+
+* publish homebrew cask to acevedomiguel/homebrew-kimiburn ([7cb45c5](https://github.com/acevedomiguel/kimiburn/commit/7cb45c594ff0f2ff90a11835a3732bade27cb295))
+
 ## 1.0.0 (2026-11-24)
 
 ### Features
