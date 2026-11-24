@@ -110,7 +110,7 @@ func TestJSONLiveSuccessSavesSnapshotAndEmitsOnlyJSON(t *testing.T) {
 	}
 	quota := quotas["limit_5h"].(map[string]any)
 	runway := quota["runway"].(map[string]any)
-	if runway["status"] != "unavailable" || runway["reason"] != "insufficient_samples" || runway["seconds"] != nil {
+	if runway["status"] != "finite" || runway["basis"] != "window_average" || runway["seconds"] == nil || runway["burn_ratio_per_second"] == nil {
 		t.Errorf("runway: %+v", runway)
 	}
 	raw := doc["raw"].(map[string]any)

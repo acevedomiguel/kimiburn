@@ -37,6 +37,7 @@ type RunwayEstimate struct {
 	SampleCount        int        `json:"sample_count"`
 	WindowSeconds      int64      `json:"window_seconds"`
 	Confidence         string     `json:"confidence"`
+	Basis              string     `json:"basis,omitempty"`
 	Reason             string     `json:"reason"`
 }
 

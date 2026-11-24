@@ -15,6 +15,10 @@ const (
 // Calculate returns a reset-bounded local estimate. It never treats the reset
 // countdown as runway and never crosses the quota's reset boundary.
 func Calculate(samples []domain.Sample, quota domain.QuotaReading, now time.Time) domain.RunwayEstimate {
+	return calculate("", samples, quota, now)
+}
+
+func calculate(key domain.QuotaKey, samples []domain.Sample, quota domain.QuotaReading, now time.Time) domain.RunwayEstimate {
 	estimate := domain.RunwayEstimate{Status: "unavailable", Confidence: "unavailable"}
 	if quota.ConflictReason != "" {
 		estimate.Reason = "conflicting_sources"
@@ -39,7 +43,7 @@ func Calculate(samples []domain.Sample, quota domain.QuotaReading, now time.Time
 	}
 	if len(samples) < minSamples || time.Duration(estimate.WindowSeconds)*time.Second < minWindow {
 		estimate.Reason = "insufficient_samples"
-		return estimate
+		return currentWindowAverage(key, estimate, quota, now)
 	}
 	times := make([]float64, len(samples))
 	ratios := make([]float64, len(samples))
@@ -67,6 +71,7 @@ func Calculate(samples []domain.Sample, quota domain.QuotaReading, now time.Time
 		estimate.Reason = "non_finite_estimate"
 		return estimate
 	}
+	estimate.Basis = "local_samples"
 	estimate.BurnRatioPerSecond = floatPtr(burn)
 	percentHour := burn * 3600 * 100
 	estimate.BurnPercentPerHour = floatPtr(percentHour)
@@ -103,10 +108,71 @@ func CalculateRunways(history map[domain.QuotaKey][]domain.Sample, reading domai
 	result := make(map[domain.QuotaKey]domain.RunwayEstimate, len(domain.CanonicalQuotaKeys))
 	for _, key := range domain.CanonicalQuotaKeys {
 		if quota, ok := reading.Quotas[key]; ok {
-			result[key] = Calculate(history[key], quota, reading.ObservedAt)
+			result[key] = calculate(key, history[key], quota, reading.ObservedAt)
 		}
 	}
 	return result
+}
+
+// currentWindowAverage estimates burn from consumption since the current
+// fixed quota window began. It provides an honest first-read estimate without
+// inventing historical samples; local OLS replaces it once enough exist.
+func currentWindowAverage(key domain.QuotaKey, estimate domain.RunwayEstimate, quota domain.QuotaReading, now time.Time) domain.RunwayEstimate {
+	if quota.ResetAt == nil {
+		return estimate
+	}
+	var start time.Time
+	switch key {
+	case domain.QuotaLimit5h:
+		start = quota.ResetAt.Add(-5 * time.Hour)
+	case domain.QuotaLimit7d:
+		start = quota.ResetAt.Add(-7 * 24 * time.Hour)
+	case domain.QuotaLimitMonthTotal, domain.QuotaLimitMonthCode:
+		start = previousMonthlyReset(*quota.ResetAt)
+	default:
+		return estimate
+	}
+	elapsed := now.Sub(start).Seconds()
+	if elapsed <= 0 || now.Before(start) {
+		return estimate
+	}
+	burn := *quota.UsedRatio / elapsed
+	if math.IsNaN(burn) || math.IsInf(burn, 0) {
+		estimate.Reason = "non_finite_estimate"
+		return estimate
+	}
+	estimate.Basis = "window_average"
+	estimate.BurnRatioPerSecond = floatPtr(burn)
+	estimate.BurnPercentPerHour = floatPtr(burn * 3600 * 100)
+	if burn <= 0 {
+		estimate.Status = "no_consumption"
+		estimate.Reason = ""
+		return estimate
+	}
+	seconds := (1 - *quota.UsedRatio) / burn
+	if math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds < 0 {
+		estimate.Reason = "non_finite_estimate"
+		estimate.BurnRatioPerSecond, estimate.BurnPercentPerHour = nil, nil
+		return estimate
+	}
+	estimate.Status = "beyond_reset"
+	estimate.Seconds = floatPtr(seconds)
+	estimate.Reason = ""
+	exhaustion := now.Add(time.Duration(seconds * float64(time.Second)))
+	if exhaustion.Before(*quota.ResetAt) {
+		estimate.Status = "finite"
+		estimate.ExhaustedAt = timePtr(exhaustion)
+	}
+	return estimate
+}
+
+func previousMonthlyReset(reset time.Time) time.Time {
+	year, month, day := reset.Date()
+	lastDay := time.Date(year, month, 1, 0, 0, 0, 0, reset.Location()).AddDate(0, 0, -1).Day()
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(year, month-1, day, reset.Hour(), reset.Minute(), reset.Second(), reset.Nanosecond(), reset.Location())
 }
 
 func floatPtr(v float64) *float64    { return &v }

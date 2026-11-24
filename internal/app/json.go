@@ -63,6 +63,7 @@ type publicRunway struct {
 	SampleCount        int        `json:"sample_count"`
 	WindowSeconds      int64      `json:"window_seconds"`
 	Confidence         string     `json:"confidence"`
+	Basis              string     `json:"basis,omitempty"`
 }
 
 // WriteJSON emits only indented schema-1 JSON and a trailing newline. It
@@ -142,7 +143,7 @@ func projectRunway(runway domain.RunwayEstimate) publicRunway {
 	result := publicRunway{
 		Status: runway.Status, Seconds: runway.Seconds,
 		BurnRatioPerSecond: runway.BurnRatioPerSecond, BurnPercentPerHour: runway.BurnPercentPerHour,
-		SampleCount: runway.SampleCount, WindowSeconds: runway.WindowSeconds, Confidence: runway.Confidence,
+		SampleCount: runway.SampleCount, WindowSeconds: runway.WindowSeconds, Confidence: runway.Confidence, Basis: runway.Basis,
 	}
 	if runway.Reason != "" {
 		reason := runway.Reason

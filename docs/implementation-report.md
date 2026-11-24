@@ -29,7 +29,7 @@ inference call, or real account fixture was added.
 | S1.6 atomic versioned cache | `fd49391` |
 | S1.7 stable JSON and one-shot CLI | `9a020a7` |
 | S1.8 compatibility contract | `a903126` |
-| S1.9 authenticated redacted probe | **Blocked:** no explicit live user token was supplied; see residual risks |
+| S1.9 authenticated redacted probe | Completed with explicit user authorization on 2026-11-24; schema-only inspection, no raw capture committed |
 | S2.1 deterministic synthetic demo | `84ee54a` |
 | S2.2 quota panels and responsive layout | `84ee54a` |
 | S2.3 interactive dashboard states/help | `a2460fd` |
@@ -112,11 +112,13 @@ Release evidence:
 
 ## Residual risks and explicit limitations
 
-1. **S1.9 remains unchecked.** No authenticated probe was run because the user
-   did not explicitly supply a live token. Exact account wire variant, complete
-   observed keys/types, timestamp precision, and wallet shape remain unverified
-   against a real account. Official-client evidence and synthetic variants
-   guide the parser, but are not a public API stability guarantee.
+1. The user authorized an authenticated, read-only probe using the existing
+   local credential on 2026-11-24. It confirmed coexisting modern `usages`
+   ratios and legacy `limits[].window/detail` fields in one real response. Only
+   schema paths, types, and derived estimator behavior were inspected; raw
+   account values were not committed. This is one account at one point in time,
+   not a public API stability guarantee; absent optional wallet fields remain
+   unobserved.
 2. Ratio-only responses cannot supply absolute request/token/currency totals.
    Shared monthly membership and monthly Code allocation are not additive.
 3. Local runway quality depends on provider update frequency and user traffic.

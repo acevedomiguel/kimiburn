@@ -42,7 +42,7 @@ func TestJSONUsesPriorCachedSamplesForRunway(t *testing.T) {
 	}
 }
 
-func TestJSONNoCacheColdStartReportsInsufficientSamples(t *testing.T) {
+func TestJSONNoCacheColdStartUsesWindowAverageWithoutStateIO(t *testing.T) {
 	isolatedEnv(t)
 	now := time.Date(2026, 11, 24, 17, 0, 0, 0, time.UTC)
 	t.Setenv("KIMIBURN_TOKEN", "synthetic-cli-token")
@@ -60,7 +60,7 @@ func TestJSONNoCacheColdStartReportsInsufficientSamples(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := doc.Quotas[string(domain.QuotaLimit5h)].Runway
-	if got.Status != "unavailable" || got.Reason != "insufficient_samples" || got.SampleCount != 1 {
+	if got.Status != "finite" || got.Basis != "window_average" || got.SampleCount != 1 || got.BurnRatioPerSecond == nil {
 		t.Fatalf("runway=%+v", got)
 	}
 	if store.loads != 0 || store.saves != 0 {

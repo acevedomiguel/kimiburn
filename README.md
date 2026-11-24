@@ -98,12 +98,18 @@ remaining percentage in separate columns. The dashboard keeps raw provider
 JSON out of the way; use `--json` when you need the complete structured
 response.
 
-Runway is calculated locally from successful live ratio samples. It is an
-approximation, not a server forecast. At least five samples spanning 120
-seconds are required. A reset or ratio decrease clears only the affected
-quota's history. Forecasts never cross reset: `Beyond this reset` has no
-exhaustion timestamp. Missing resets, invalid ratios, and conflicting sources
-produce explicit unavailable reasons.
+Runway and burn are calculated locally, not supplied by Kimi. On a first read,
+Kimiburn estimates average burn from the reported ratio and elapsed portion of
+the current fixed 5-hour or 7-day window. Monthly estimates assume the reset
+repeats on the same monthly date, clamped to the previous month's last day.
+After at least five local samples spanning 120 seconds, ordinary least squares
+uses the observed sample trend instead. JSON reports the estimator as
+`window_average` or `local_samples` in each runway's `basis` field.
+
+A reset or ratio decrease clears only the affected quota's history. Forecasts
+never cross reset: `Beyond this reset` has no exhaustion timestamp. Missing
+resets, invalid ratios, and conflicting sources produce explicit unavailable
+reasons.
 
 ## Configuration
 

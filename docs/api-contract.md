@@ -71,16 +71,23 @@ absence of a field is not treated as zero.
 ## History and runway are local estimates
 
 The usage response provides current quota and reset information, not a
-historical burn series or a server-computed exhaustion forecast. Kimiburn may
-derive runway from repeated local observations in one reset period. It must
-not imply that Kimi supplied that estimate. Reset changes and ratio decreases
-invalidate the old series; no forecast may cross a reset boundary.
+historical burn series or a server-computed exhaustion forecast. For a first
+reading, Kimiburn derives average burn from the elapsed portion of the current
+5-hour or 7-day window. Monthly estimates use the same reset date in the
+previous month, clamped to that month's last day. Once at least five samples
+spanning 120 seconds exist, local ordinary least squares replaces this initial
+average. Public JSON distinguishes these methods with `basis` values
+`window_average` and `local_samples`.
+
+Neither method implies that Kimi supplied the estimate. Reset changes and
+ratio decreases invalidate the old series; no forecast may cross a reset
+boundary.
 
 ## Raw-data privacy
 
 Provider responses can contain account-specific data. Raw values are allowed
-only in the requesting user's explicit JSON output, private local cache, and
-local additional-data UI. They must not appear in logs, error strings, issue
+only in the requesting user's explicit JSON output and private local cache.
+They must not appear in logs, error strings, issue
 reports, committed fixtures, screenshots, or documentation examples.
 
 Repository fixtures and examples use invented synthetic values. They are not
