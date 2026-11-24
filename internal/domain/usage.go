@@ -62,19 +62,19 @@ const ConflictSources ConflictReason = "conflicting_sources"
 // QuotaReading is one quota's normalized values. A nil pointer means the
 // provider did not report that value; it never means zero.
 type QuotaReading struct {
-	Source         QuotaSource
-	UsedRatio      *float64
-	Limit          *float64
-	Used           *float64
-	Remaining      *float64
-	ResetAt        *time.Time
-	ConflictReason ConflictReason
-	Raw            json.RawMessage
+	Source         QuotaSource     `json:"source"`
+	UsedRatio      *float64        `json:"used_ratio"`
+	Limit          *float64        `json:"limit"`
+	Used           *float64        `json:"used"`
+	Remaining      *float64        `json:"remaining"`
+	ResetAt        *time.Time      `json:"reset_at"`
+	ConflictReason ConflictReason  `json:"conflict_reason,omitempty"`
+	Raw            json.RawMessage `json:"raw"`
 }
 
 // Warning is a stable section name plus a human-readable message that has
 // already passed through the redactor.
 type Warning struct {
-	Section string
-	Message string
+	Section string `json:"section"`
+	Message string `json:"message"`
 }
