@@ -1,0 +1,35 @@
+## 1.0.0 (2026-11-24)
+
+### Features
+
+* add bounded Kimi usage client and wire setup validation ([8904099](https://github.com/acevedomiguel/kimiburn/commit/890409946b01f3c123c75db5889386fdf7f6d47c))
+* add interactive dashboard states and scheduler ([a2460fd](https://github.com/acevedomiguel/kimiburn/commit/a2460fdfcdf966ad0d9797725c30b2f188927010))
+* add kimiburn repository baseline and CLI skeleton ([e7113ba](https://github.com/acevedomiguel/kimiburn/commit/e7113bac76fe616ba12044211469957182ae4918))
+* add one-token credential store, setup, logout, and redaction ([8c15eb5](https://github.com/acevedomiguel/kimiburn/commit/8c15eb557a0e8ed6d8291c998da39625d197bfbb))
+* add stable JSON snapshot command ([9a020a7](https://github.com/acevedomiguel/kimiburn/commit/9a020a743e5abd3089b5d3f13a696b09833b83e2))
+* add strict config, platform paths, and config commands ([3031272](https://github.com/acevedomiguel/kimiburn/commit/303127272db3b3bff16549e321d4b65109793398))
+* add synthetic demo and quota panels ([84ee54a](https://github.com/acevedomiguel/kimiburn/commit/84ee54a1a6d32f63a9ac0e32872bf1b82c07c112))
+* add versioned atomic state cache ([fd49391](https://github.com/acevedomiguel/kimiburn/commit/fd49391ac44baae527ec2710e579cdd0f7b1251b))
+* connect live cache and dashboard runtime ([bfd5c23](https://github.com/acevedomiguel/kimiburn/commit/bfd5c23fcf8a2816cdf4c65978edb457ab9ea902))
+* decode modern and legacy usage quotas ([45d1613](https://github.com/acevedomiguel/kimiburn/commit/45d1613aec49e64134a7c5274a34251fb3734726))
+* derive reset-bounded local runway estimates ([065670f](https://github.com/acevedomiguel/kimiburn/commit/065670f3504dc54429b151c5bfffd6f9442ddd49))
+* prepare public releases and document usage ([8a31c4c](https://github.com/acevedomiguel/kimiburn/commit/8a31c4cccef3159635950a98c7ff1159f8d6177d))
+
+### Bug Fixes
+
+* configure demo refresh and clarify remaining bars ([6d1e31d](https://github.com/acevedomiguel/kimiburn/commit/6d1e31dfd53158be18679557cd0e50b25935df25))
+* decode and reconcile nested legacy quotas ([64d8fd2](https://github.com/acevedomiguel/kimiburn/commit/64d8fd23b6043eaac6525d62ef4cc33b6b249fbb))
+* distinguish keyring not-found and redact early credential errors ([4049cc8](https://github.com/acevedomiguel/kimiburn/commit/4049cc87e3f8cf6c1a279d647fe37beb56a1103c))
+* enforce exact base URLs and saturate Retry-After overflow ([c6f49d2](https://github.com/acevedomiguel/kimiburn/commit/c6f49d267df339fae905f8ec9bf63a44c9c78bcc))
+* estimate burn from current quota window ([632d7a0](https://github.com/acevedomiguel/kimiburn/commit/632d7a0c947ad8a6f3effaeda3deccd23ae0193b))
+* handle Windows golden files and replacement targets ([212e2f2](https://github.com/acevedomiguel/kimiburn/commit/212e2f2a25a7f543e8616d74838554835a9d791a))
+* improve dashboard startup and quota presentation ([3ad7ba3](https://github.com/acevedomiguel/kimiburn/commit/3ad7ba3d45edf8a2ba11f0a8f02630cf0926c362))
+* make credential lifecycle independent of config and atomic ([1276f76](https://github.com/acevedomiguel/kimiburn/commit/1276f76ca8bed5d654db1104cae1f30750969fa3))
+* preserve legacy ratios for conflict checks ([ad79a14](https://github.com/acevedomiguel/kimiburn/commit/ad79a1410d94fc3dda5994e29aa94a27ee2cbb98))
+* reject non-exact base URLs and extra YAML documents ([792007a](https://github.com/acevedomiguel/kimiburn/commit/792007ae573ba4052eb118c993e0e48c41447c11))
+* saturate positive Retry-After seconds beyond int64 ([6164cde](https://github.com/acevedomiguel/kimiburn/commit/6164cde70509df743c071db0351f5460e2085cf8))
+* simplify dashboard title and quota times ([9de3047](https://github.com/acevedomiguel/kimiburn/commit/9de3047456f1384bbb595c5d64f9e83f564a1681))
+* simplify quota presentation and demo refresh ([e88e56d](https://github.com/acevedomiguel/kimiburn/commit/e88e56da98f8089b71efe822a4522d4b17e132cb))
+* support escape quit and local reading time ([ed8626c](https://github.com/acevedomiguel/kimiburn/commit/ed8626c7bf4c0e86fe5ca39f7997a25dbf335610))
+* suppress invalid relative XDG variable during path fallback ([d6fd5b0](https://github.com/acevedomiguel/kimiburn/commit/d6fd5b004714c54f84fd67f81ff97040a227068d))
+* tighten reset permissions and ignore relative XDG overrides ([d8c1983](https://github.com/acevedomiguel/kimiburn/commit/d8c1983092690a5f290f84346ab35fd6b5aa9bf7))
