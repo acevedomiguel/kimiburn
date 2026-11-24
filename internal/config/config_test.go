@@ -320,6 +320,37 @@ func TestWriteSampleIsLoadableAndRestricted(t *testing.T) {
 	}
 }
 
+func TestWriteSampleTightensExistingPermissions(t *testing.T) {
+	// os.WriteFile(0600) does not tighten a file that already exists with
+	// looser bits, so a reset over a 0644 config must still end at 0600.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := WriteSample(path); err != nil {
+		t.Fatalf("WriteSample: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if PermissionsAreEnforced {
+		if perm := info.Mode().Perm(); perm&0o077 != 0 {
+			t.Errorf("permissions = %o, want no group/world access after reset", perm)
+		}
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "refresh_interval") {
+		t.Errorf("reset did not rewrite the sample config:\n%s", raw)
+	}
+}
+
 func TestLoadIgnoresEmptyEnvAndEmptyFlags(t *testing.T) {
 	empty := ""
 	cfg, err := Load(nil, map[string]string{"KIMIBURN_THEME": "", "KIMIBURN_BASE_URL": ""}, Overrides{BaseURL: &empty})

@@ -61,6 +61,29 @@ func TestPathsIsolateConfigFromCache(t *testing.T) {
 	}
 }
 
+func TestPathsIgnoreRelativeXDGOverrides(t *testing.T) {
+	// XDG requires absolute paths; a relative override is invalid and must be
+	// ignored rather than making the resolved paths depend on the process cwd.
+	t.Setenv("XDG_CONFIG_HOME", "relative-config")
+	t.Setenv("XDG_CACHE_HOME", "relative-cache")
+
+	p, err := DefaultPaths()
+	if err != nil {
+		t.Fatalf("DefaultPaths: %v", err)
+	}
+	if !filepath.IsAbs(p.ConfigFile) || !filepath.IsAbs(p.CacheFile) {
+		t.Errorf("relative XDG overrides produced non-absolute paths: config=%q cache=%q", p.ConfigFile, p.CacheFile)
+	}
+	if strings.HasPrefix(p.ConfigFile, "relative-config") || strings.HasPrefix(p.CacheFile, "relative-cache") {
+		t.Errorf("relative XDG overrides were not ignored: config=%q cache=%q", p.ConfigFile, p.CacheFile)
+	}
+
+	base, err := os.UserConfigDir()
+	if err == nil && !strings.HasPrefix(p.ConfigFile, base) {
+		t.Errorf("config file = %q, want the platform fallback under %q", p.ConfigFile, base)
+	}
+}
+
 func TestPathsFallBackToOSDefaults(t *testing.T) {
 	// With XDG unset the platform-native user dirs are used; the leaf layout is
 	// unchanged.

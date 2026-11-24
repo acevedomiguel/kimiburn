@@ -222,6 +222,14 @@ func WriteSample(path string) error {
 	if err := os.WriteFile(path, []byte(sampleYAML), 0o600); err != nil {
 		return fmt.Errorf("config: write %s: %w", path, err)
 	}
+	// WriteFile only applies the mode when it creates the file, so an existing
+	// looser file must be tightened explicitly. Windows has no POSIX bits, so
+	// this is skipped there (PermissionsAreEnforced is false).
+	if PermissionsAreEnforced {
+		if err := os.Chmod(path, 0o600); err != nil {
+			return fmt.Errorf("config: restrict %s: %w", path, err)
+		}
+	}
 	return nil
 }
 

@@ -52,11 +52,13 @@ func parentDir(path string) string {
 	return dir
 }
 
-// userDir prefers an explicit XDG directory when the user set one, and falls
-// back to the platform-native location otherwise. On macOS the standard library
-// ignores XDG, but users who set it expect it to win.
+// userDir prefers an explicit absolute XDG directory when the user set one,
+// and falls back to the platform-native location otherwise. XDG requires
+// absolute paths, so a relative override is invalid and ignored rather than
+// making the resolved paths depend on the process working directory. On macOS
+// the standard library ignores XDG, but users who set it expect it to win.
 func userDir(envVar string, fallback func() (string, error)) (string, error) {
-	if v := strings.TrimSpace(os.Getenv(envVar)); v != "" {
+	if v := strings.TrimSpace(os.Getenv(envVar)); v != "" && filepath.IsAbs(v) {
 		return v, nil
 	}
 	return fallback()
