@@ -241,7 +241,9 @@ func TestDecodeModernLegacyRatioTolerance(t *testing.T) {
 	}{
 		{"inside tolerance", "0.009", "1000", "5", false},
 		{"at tolerance", "0.010", "1000", "5", false},
+		{"base shifted at tolerance", "0.505", "1000", "500", false},
 		{"outside tolerance", "0.011", "1000", "5", true},
+		{"base shifted above tolerance", "0.506", "1000", "500", true},
 		{"material conflict", "0.9", "100", "50", true},
 	}
 	for _, tc := range cases {
@@ -267,6 +269,18 @@ func TestDecodeModernLegacyRatioTolerance(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDecodeOutOfRangeLegacyRatioStillConflictsWithModern(t *testing.T) {
+	reading := decodeSynthetic(t, `{"usages":{"limit_7d":{"used_ratio":0.5}},"usage":{"limit":1,"used":2,"remaining":0}}`)
+	quota := reading.Quotas[domain.QuotaLimit7d]
+	if quota.UsedRatio != nil {
+		t.Fatalf("normalized ratio = %v, want nil rather than modern or out-of-range legacy value", *quota.UsedRatio)
+	}
+	if quota.ConflictReason != domain.ConflictSources {
+		t.Fatalf("conflict reason = %q, want conflicting_sources", quota.ConflictReason)
+	}
+	requireCount(t, quota.Used, 2)
 }
 
 func TestDecodeInvalidModernNeverSilentlyFallsBackToLegacy(t *testing.T) {

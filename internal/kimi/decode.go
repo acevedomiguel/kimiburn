@@ -29,6 +29,9 @@ type modernQuota struct {
 
 type legacyQuota struct {
 	reading domain.QuotaReading
+	// comparisonRatio retains finite legacy division for source consistency
+	// even when the value is outside the normalized [0,1] range.
+	comparisonRatio *float64
 }
 
 // decodeUsage maps recognized wire representations without ever interpreting
@@ -74,7 +77,7 @@ func decodeUsage(raw json.RawMessage, observedAt time.Time) domain.UsageReading 
 					quota.UsedRatio = nil
 					quota.ConflictReason = domain.ConflictSources
 					addWarning(&reading.Warnings, "Quota consistency", string(key)+": modern ratio is unavailable; legacy counts cannot replace it")
-				case legacyQuota.reading.UsedRatio != nil && math.Abs(*quota.UsedRatio-*legacyQuota.reading.UsedRatio) > legacyRatioTolerance:
+				case legacyQuota.comparisonRatio != nil && !ratiosAgree(*quota.UsedRatio, *legacyQuota.comparisonRatio):
 					quota.UsedRatio = nil
 					quota.ConflictReason = domain.ConflictSources
 					addWarning(&reading.Warnings, "Quota consistency", string(key)+": modern ratio and legacy counts disagree; normalized ratio unavailable")
@@ -229,20 +232,26 @@ func decodeLegacy(raw json.RawMessage, key domain.QuotaKey, warnings *[]domain.W
 	}
 	quota.ResetAt = reset
 
+	var comparisonRatio *float64
 	if !invalid && quota.Limit != nil && quota.Used != nil {
 		switch {
 		case *quota.Limit > 0:
 			ratio := *quota.Used / *quota.Limit
-			if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 1 {
+			if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 {
 				addWarning(warnings, string(key), "derived used ratio is non-finite or outside [0,1]; normalized ratio unavailable")
 			} else {
-				quota.UsedRatio = floatPointer(ratio)
+				comparisonRatio = floatPointer(ratio)
+				if ratio <= 1 {
+					quota.UsedRatio = floatPointer(ratio)
+				} else {
+					addWarning(warnings, string(key), "derived used ratio is non-finite or outside [0,1]; normalized ratio unavailable")
+				}
 			}
 		case *quota.Used > 0:
 			addWarning(warnings, string(key), "zero limit with positive usage is invalid; normalized ratio unavailable")
 		}
 	}
-	return legacyQuota{reading: quota}, true
+	return legacyQuota{reading: quota, comparisonRatio: comparisonRatio}, true
 }
 
 // finiteNumber distinguishes absent/null from a recognized invalid value.
@@ -291,6 +300,18 @@ func resetTime(raw json.RawMessage) (value *time.Time, present, valid bool) {
 		return nil, true, false
 	}
 	return &parsed, true, true
+}
+
+// ratiosAgree allows at most one ULP at the operands' scale for subtraction
+// rounding. It does not materially widen the 0.005 comparison tolerance.
+func ratiosAgree(modern, legacy float64) bool {
+	difference := math.Abs(modern - legacy)
+	if difference <= legacyRatioTolerance {
+		return true
+	}
+	largestOperand := math.Max(math.Abs(modern), math.Abs(legacy))
+	roundingBound := math.Nextafter(largestOperand, math.Inf(1)) - largestOperand
+	return !math.IsInf(roundingBound, 0) && difference <= legacyRatioTolerance+roundingBound
 }
 
 func addWarning(warnings *[]domain.Warning, section, message string) {
