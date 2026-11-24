@@ -7,6 +7,25 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+func TestDashboardCentersTitleAndOmitsAbsoluteQuotaTimes(t *testing.T) {
+	frame := RenderDashboard(SyntheticSnapshot(), DashboardOptions{Width: 120, Height: 40, Demo: true, Styles: NewStyles(false)})
+	first := strings.Split(frame, "\n")[0]
+	const title = "KIMIBURN · SYNTHETIC DATA · no provider calls"
+	left := strings.Index(first, title)
+	if left < 0 {
+		t.Fatalf("title is missing: %q", first)
+	}
+	right := lipgloss.Width(first) - left - lipgloss.Width(title)
+	if difference := left - right; difference < -1 || difference > 1 {
+		t.Errorf("title is not centered: left=%d right=%d", left, right)
+	}
+	for _, unwanted := range []string{"2026-12-12", "2026-11-24", "Exhausts", "16:52:30"} {
+		if strings.Contains(frame, unwanted) {
+			t.Errorf("dashboard still contains absolute quota time %q", unwanted)
+		}
+	}
+}
+
 func TestRemainingMeterPlacesLabelBarAndPercentageInColumns(t *testing.T) {
 	const width = 40
 	got := remainingMeter(0.418, width, NewStyles(false))

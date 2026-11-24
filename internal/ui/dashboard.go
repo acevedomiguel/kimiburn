@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/acevedomiguel/kimiburn/internal/domain"
 )
 
@@ -95,7 +96,11 @@ func RenderDashboard(snapshot domain.Snapshot, opts DashboardOptions) string {
 	if opts.Demo {
 		title = "KIMIBURN · SYNTHETIC DATA · no provider calls"
 	}
-	lines = append(lines, padRight(truncate(opts.Styles.Title.Render(title), opts.Width), opts.Width))
+	styledTitle := opts.Styles.Title.Render(title)
+	if left := (opts.Width - lipgloss.Width(title)) / 2; left > 0 {
+		styledTitle = strings.Repeat(" ", left) + styledTitle
+	}
+	lines = append(lines, padRight(truncate(styledTitle, opts.Width), opts.Width))
 	if warning != "" {
 		lines = append(lines, padRight(truncate(opts.Styles.Warning.Render("Warning · "+warning+" · press ? for details"), opts.Width), opts.Width))
 	}
@@ -127,16 +132,10 @@ func quotaPanel(title string, key domain.QuotaKey, quota domain.QuotaReading, ok
 		rows = append(rows, st.Muted.Render("Meter unavailable · ratio not reported or invalid"))
 	}
 	resetValue := FormatReset(quota.ResetAt, now)
-	if textWidth >= 48 && quota.ResetAt != nil && quota.ResetAt.After(now) {
-		resetValue += " · " + quota.ResetAt.UTC().Format("2006-01-02 15:04Z")
-	}
 	rows = append(rows,
 		leader("Reset", resetValue, textWidth, st),
 		leader("Runway", FormatRunway(runway, key), textWidth, st),
 	)
-	if runway.Status == "finite" {
-		rows = append(rows, leader("Exhausts", FormatExhaustion(runway), textWidth, st))
-	}
 	rows = append(rows, leader("Burn", FormatBurn(runway, key), textWidth, st))
 	if quota.Used != nil && quota.Limit != nil {
 		counts := FormatCount(quota.Used) + "/" + FormatCount(quota.Limit) + " used"
