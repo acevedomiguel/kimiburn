@@ -36,13 +36,13 @@ func SyntheticSnapshot() domain.Snapshot {
 }
 
 // SyntheticLegacySnapshot adds absolute seven-day request counts to the modern
-// demo. It exercises legacy and additional-data presentation without I/O.
+// demo. It exercises legacy count presentation without I/O.
 func SyntheticLegacySnapshot() domain.Snapshot {
 	snapshot := SyntheticSnapshot()
 	reset := snapshot.GeneratedAt.Add(48 * time.Hour)
 	usedRatio, used, limit, remaining, burn := 0.4, 40.0, 100.0, 60.0, 0.0
 	snapshot.Quotas[domain.QuotaLimit7d] = domain.QuotaReading{Source: domain.SourceLegacyCounts, UsedRatio: &usedRatio, Used: &used, Limit: &limit, Remaining: &remaining, ResetAt: &reset, Raw: json.RawMessage(`{"limit":100,"detail":40,"remaining":60}`)}
-	snapshot.Runways[domain.QuotaLimit7d] = domain.RunwayEstimate{Status: "no_consumption", BurnRatioPerSecond: &burn, BurnPercentPerHour: floatPointer(0), SampleCount: 30, WindowSeconds: 900, Confidence: "low"}
+	snapshot.Runways[domain.QuotaLimit7d] = domain.RunwayEstimate{Status: "no_consumption", BurnRatioPerSecond: &burn, BurnPercentPerHour: floatPointer(0), SampleCount: 30, WindowSeconds: 900, Confidence: "medium"}
 	snapshot.Raw = json.RawMessage(`{"goods_version":2,"usages":{"limit_5h":{"used_ratio":0.72,"reset_time":"2026-11-24T17:44:30Z"},"limit_month_total":{"used_ratio":0.418,"reset_time":"2026-12-12T20:32:30Z"}},"limits":[{"window":{"duration":10080,"timeUnit":"TIME_UNIT_MINUTE"},"limit":100,"detail":40,"remaining":60}],"boosterWallet":{"synthetic_example_field":null},"future_provider_field":"synthetic-passthrough-value"}`)
 	return snapshot
 }
@@ -54,7 +54,7 @@ func SyntheticUnavailableSnapshot() domain.Snapshot {
 		SchemaVersion: 1, GeneratedAt: syntheticTime,
 		Quotas: map[domain.QuotaKey]domain.QuotaReading{}, Runways: map[domain.QuotaKey]domain.RunwayEstimate{},
 		Raw:      json.RawMessage(`{"future_provider_field":"synthetic-unavailable-value"}`),
-		Warnings: []domain.Warning{{Section: "Parser", Message: "No canonical quotas were reported; additional data is available below."}},
+		Warnings: []domain.Warning{{Section: "Parser", Message: "No canonical quotas were reported; raw provider data is available with --json."}},
 	}
 }
 

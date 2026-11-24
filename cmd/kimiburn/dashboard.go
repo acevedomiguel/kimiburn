@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -38,6 +39,20 @@ func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stde
 	}
 	noColor = noColor || cfg.Color == "never"
 	credentialStore := credentials.NewStore(credentials.Options{Keyring: d.keyring, TokenFile: paths.TokenFile(), KeyringEnabled: cfg.Keyring})
+	token, err := credentialStore.Resolve(context.Background())
+	if err != nil {
+		fmt.Fprintf(stderr, "kimiburn: could not read credentials: %s\n", earlyRedact(err.Error()))
+		return exitFailure
+	}
+	if token == "" {
+		setup := d.setup
+		if setup == nil {
+			setup = doSetup
+		}
+		if code := setup(paths, opts, stdin, stdout, stderr, d); code != exitOK {
+			return code
+		}
+	}
 	stateStore := d.stateStore
 	if stateStore == nil {
 		if opts.noCache {

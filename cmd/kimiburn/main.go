@@ -85,6 +85,8 @@ type deps struct {
 	// runDashboard runs the alternate-screen program; tests drive the model
 	// directly without a terminal.
 	runDashboard func(app.Model, io.Reader, io.Writer) error
+	// setup runs interactive token setup when the root command finds no token.
+	setup func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int
 }
 
 // runWithDeps is the testable entry point.

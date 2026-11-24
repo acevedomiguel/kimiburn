@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"encoding/json"
 	"math"
 	"strings"
 	"time"
@@ -20,8 +19,8 @@ type DashboardOptions struct {
 	Scroll        int
 }
 
-// BuildDashboardBody renders every panel in priority order. Scrolling is a
-// frame concern, so additional API data is never silently discarded.
+// BuildDashboardBody renders normalized quota panels in priority order.
+// Raw provider JSON is available through --json, not the interactive dashboard.
 func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []string {
 	layout := Classify(opts.Width, opts.Height)
 	if layout.Class == ClassTooSmall {
@@ -56,8 +55,6 @@ func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []strin
 		}
 	}
 
-	additional := additionalDataLines(snapshot.Raw, width-4)
-	lines = append(lines, panel("Additional API data", additional, width, len(additional)+2, opts.Styles)...)
 	return lines
 }
 
@@ -145,7 +142,10 @@ func quotaPanel(title string, key domain.QuotaKey, quota domain.QuotaReading, ok
 	if runway.Status == "finite" {
 		rows = append(rows, leader("Exhausts", FormatExhaustion(runway), textWidth, st))
 	}
-	rows = append(rows, leader("Burn", FormatBurn(runway, key), textWidth, st))
+	rows = append(rows,
+		leader("Burn", FormatBurn(runway, key), textWidth, st),
+		leader("Samples", FormatRunwayBasis(runway), textWidth, st),
+	)
 	if quota.Used != nil && quota.Limit != nil {
 		rows = append(rows, leader("Absolute", "Used "+FormatCount(quota.Used)+"/"+FormatCount(quota.Limit)+" requests", textWidth, st))
 		if quota.Remaining != nil {
@@ -170,33 +170,6 @@ func remainingPointer(used *float64) *float64 {
 
 func validRatio(ratio *float64) bool {
 	return ratio != nil && !math.IsNaN(*ratio) && !math.IsInf(*ratio, 0) && *ratio >= 0 && *ratio <= 1
-}
-
-func additionalDataLines(raw json.RawMessage, width int) []string {
-	top := map[string]json.RawMessage{}
-	_ = json.Unmarshal(raw, &top)
-	if usagesRaw, ok := top["usages"]; ok {
-		usages := map[string]json.RawMessage{}
-		if json.Unmarshal(usagesRaw, &usages) == nil {
-			for _, key := range domain.CanonicalQuotaKeys {
-				delete(usages, string(key))
-			}
-			if len(usages) == 0 {
-				delete(top, "usages")
-			} else {
-				encoded, _ := json.Marshal(usages)
-				top["usages"] = encoded
-			}
-		}
-	}
-	if len(top) == 0 {
-		return []string{"No additional fields reported"}
-	}
-	pretty, err := json.MarshalIndent(top, "", "  ")
-	if err != nil {
-		return []string{"Additional data could not be rendered"}
-	}
-	return wrapPlain(string(pretty), width)
 }
 
 func renderTooSmall(opts DashboardOptions) string {

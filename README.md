@@ -12,7 +12,7 @@ Built with Go and Charm as a sibling of
 
 - Reads only `GET /usages` beneath the selected Kimi Code API base.
 - Refreshes every 30 seconds by default, measured from request completion.
-- Preserves unknown provider fields for local JSON and dashboard inspection.
+- Preserves unknown provider fields in local `--json` output.
 - Keeps a private, versioned cache for offline display and local samples.
 - Labels cached data, parser conflicts, missing values, and low-confidence
   estimates instead of inventing plausible numbers.
@@ -49,8 +49,10 @@ Pi, the Kimi CLI, or another application.
 kimiburn setup
 ```
 
-Setup accepts a hidden terminal entry or one piped token, validates it with one
-live usage request, and then stores it. The OS keyring is preferred. If the
+Running `kimiburn` without a token starts this setup automatically, then opens
+the dashboard after success; a second command is not needed. Setup accepts a
+hidden terminal entry or one piped token, validates it with one live usage
+request, and then stores it. The OS keyring is preferred. If the
 keyring is unavailable, a permission-restricted fallback file is used. For a
 non-interactive process, set `KIMIBURN_TOKEN` in its environment.
 
@@ -89,13 +91,15 @@ rejected unless the value is zero.
 
 The monthly membership and 5-hour panels have priority. Kimi Code monthly is
 shown as an allocation within membership. Legacy 7-day data appears only when
-reported. The Additional API data panel retains unknown structured JSON; scroll
-down to inspect it.
+reported. The dashboard keeps raw provider JSON out of the way; use `--json`
+when you need the complete structured response.
 
 Runway is calculated locally from successful live ratio samples. It is not a
 server forecast. At least five samples spanning 120 seconds are required.
 Confidence is low at that minimum, medium at 30 samples and 15 minutes, and
-high at 120 samples and 60 minutes. A reset or ratio decrease clears only the
+high at 120 samples and 60 minutes. Each quota card shows its sample count,
+observation window, and confidence, including progress while samples are
+collected. A reset or ratio decrease clears only the
 affected quota's history. Forecasts never cross reset: `Beyond this reset` has
 no exhaustion timestamp. Missing resets, invalid ratios, and conflicting
 sources produce explicit unavailable reasons.

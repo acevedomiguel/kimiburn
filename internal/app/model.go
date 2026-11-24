@@ -117,7 +117,7 @@ func NewModel(opts Options) Model {
 	}
 	return Model{
 		state: state, snapshot: opts.Snapshot, width: opts.Width, height: opts.Height,
-		styles: ui.NewStyles(opts.NoColor), interval: opts.Interval, now: opts.Now,
+		styles: ui.NewStyles(!opts.NoColor), interval: opts.Interval, now: opts.Now,
 		cancel: opts.Cancel, configured: opts.Configured, refresh: opts.Refresh,
 		demo: opts.Demo, warning: opts.Warning,
 	}

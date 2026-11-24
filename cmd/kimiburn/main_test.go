@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/acevedomiguel/kimiburn/internal/app"
+	"github.com/acevedomiguel/kimiburn/internal/config"
+	"github.com/acevedomiguel/kimiburn/internal/credentials"
 	"github.com/acevedomiguel/kimiburn/internal/domain"
 )
 
@@ -93,21 +95,61 @@ func TestRunVersionPrintsVersionOnStdout(t *testing.T) {
 	assertNoStateWritten(t, home)
 }
 
-func TestRunWithoutArgsInvokesDashboardEntryPoint(t *testing.T) {
+func TestRunWithoutTokenRunsSetupThenDashboard(t *testing.T) {
 	isolatedEnv(t)
 	var out, errOut bytes.Buffer
 	d := defaultDeps()
 	d.keyring = nil
+	setupCalls := 0
+	d.setup = func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int {
+		setupCalls++
+		t.Setenv(credentials.EnvToken, "test-token")
+		return exitOK
+	}
 	d.runDashboard = func(model app.Model, _ io.Reader, _ io.Writer) error {
 		updated, cmd := model.Update(model.Init()())
-		if cmd != nil {
-			updated, _ = updated.Update(cmd())
+		if cmd == nil {
+			t.Fatal("live dashboard did not start a refresh")
 		}
-		if got := updated.(app.Model).View().Content; !strings.Contains(got, "Token setup required") {
-			t.Fatalf("root view: %s", got)
+		got := updated.(app.Model).View().Content
+		if strings.Contains(got, "Token setup required") || !strings.Contains(got, "Loading latest Kimi Code quota") {
+			t.Fatalf("dashboard did not follow successful setup: %s", got)
 		}
 		return nil
 	}
+	if code := runWithDeps(nil, errorReader{}, &out, &errOut, d); code != exitOK {
+		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
+	}
+	if setupCalls != 1 {
+		t.Fatalf("setup calls = %d, want 1", setupCalls)
+	}
+}
+
+func TestRunDoesNotStartDashboardWhenAutomaticSetupFails(t *testing.T) {
+	isolatedEnv(t)
+	var out, errOut bytes.Buffer
+	d := defaultDeps()
+	d.keyring = nil
+	d.setup = func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int { return exitFailure }
+	d.runDashboard = func(app.Model, io.Reader, io.Writer) error {
+		t.Fatal("dashboard started after setup failed")
+		return nil
+	}
+	if code := runWithDeps(nil, errorReader{}, &out, &errOut, d); code != exitFailure {
+		t.Fatalf("exit=%d, want %d", code, exitFailure)
+	}
+}
+
+func TestRunWithTokenSkipsAutomaticSetup(t *testing.T) {
+	isolatedEnv(t)
+	t.Setenv(credentials.EnvToken, "already-configured")
+	var out, errOut bytes.Buffer
+	d := defaultDeps()
+	d.setup = func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int {
+		t.Fatal("setup ran despite an existing token")
+		return exitFailure
+	}
+	d.runDashboard = func(app.Model, io.Reader, io.Writer) error { return nil }
 	if code := runWithDeps(nil, errorReader{}, &out, &errOut, d); code != exitOK {
 		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
 	}

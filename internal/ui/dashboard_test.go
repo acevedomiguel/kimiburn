@@ -11,13 +11,14 @@ import (
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
-func TestDashboardBodyShowsCoreFactsAndRawAdditionalData(t *testing.T) {
+func TestDashboardBodyShowsCoreFactsWithoutRawAdditionalData(t *testing.T) {
 	snapshot := SyntheticLegacySnapshot()
 	body := strings.Join(BuildDashboardBody(snapshot, DashboardOptions{Width: 100, Height: 40, Now: snapshot.GeneratedAt.Add(time.Minute), Styles: NewStyles(false)}), "\n")
 	for _, want := range []string{
 		"Monthly membership", "5-hour quota", "Kimi Code monthly", "7-day quota · legacy",
 		"41.8%", "72.0%", "Allocation within shared membership · not additive",
-		"Used 40/100 requests", "Additional API data", "future_provider_field", "synthetic-passthrough-value",
+		"121 · 1h 0m · high", "60 · 29m · medium",
+		"30 · 15m · medium", "Used 40/100 requests",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q\n%s", want, body)
@@ -26,8 +27,10 @@ func TestDashboardBodyShowsCoreFactsAndRawAdditionalData(t *testing.T) {
 	if !regexp.MustCompile(`Remaining ·+ 60`).MatchString(body) {
 		t.Errorf("legacy remaining count missing\n%s", body)
 	}
-	if strings.Contains(body, `"limit_5h"`) || strings.Contains(body, `"limit_month_total"`) {
-		t.Errorf("normalized raw entries duplicated:\n%s", body)
+	for _, unwanted := range []string{"Additional API data", "future_provider_field", "synthetic-passthrough-value", `"limit_5h"`, `"limit_month_total"`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("dashboard exposes raw provider JSON %q:\n%s", unwanted, body)
+		}
 	}
 }
 

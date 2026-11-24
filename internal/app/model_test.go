@@ -137,3 +137,14 @@ func TestFatalAndSetupRenderWithoutData(t *testing.T) {
 		t.Fatalf("setup view: %s", got)
 	}
 }
+
+func TestModelEnablesColorByDefaultAndHonorsNoColor(t *testing.T) {
+	colored := NewModel(Options{Width: 100, Height: 40, Snapshot: ui.SyntheticSnapshot()}).View().Content
+	if !strings.Contains(colored, "\x1b[") {
+		t.Fatal("default dashboard contains no ANSI color styling")
+	}
+	plain := NewModel(Options{Width: 100, Height: 40, Snapshot: ui.SyntheticSnapshot(), NoColor: true}).View().Content
+	if strings.Contains(plain, "\x1b[") {
+		t.Fatal("--no-color dashboard contains ANSI styling")
+	}
+}

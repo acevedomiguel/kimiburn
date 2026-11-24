@@ -65,6 +65,24 @@ func FormatRunway(runway domain.RunwayEstimate, key domain.QuotaKey) string {
 	}
 }
 
+// FormatRunwayBasis makes local sample progress visible instead of presenting
+// an unexplained unavailable estimate. Confidence is shown once enough samples
+// exist to calculate a burn rate.
+func FormatRunwayBasis(runway domain.RunwayEstimate) string {
+	window := formatDuration(time.Duration(runway.WindowSeconds)*time.Second, false)
+	if runway.Status == "unavailable" && runway.Reason == "insufficient_samples" {
+		return fmt.Sprintf("%d/5 · %s/2m", runway.SampleCount, window)
+	}
+	if runway.SampleCount <= 0 {
+		return "No usable local history"
+	}
+	basis := fmt.Sprintf("%d · %s", runway.SampleCount, window)
+	if runway.Confidence != "" && runway.Confidence != "unavailable" {
+		basis += " · " + runway.Confidence
+	}
+	return basis
+}
+
 func withConfidence(label, confidence string) string {
 	if confidence == "" {
 		confidence = "unavailable"

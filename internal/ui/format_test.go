@@ -61,3 +61,14 @@ func TestResetAndRunwayFormatting(t *testing.T) {
 		t.Errorf("day burn=%q", got)
 	}
 }
+
+func TestFormatRunwayBasisShowsSamplingProgressAndConfidence(t *testing.T) {
+	collecting := domain.RunwayEstimate{Status: "unavailable", Reason: "insufficient_samples", SampleCount: 1, WindowSeconds: 30}
+	if got := FormatRunwayBasis(collecting); got != "1/5 · <1m/2m" {
+		t.Fatalf("collecting basis = %q", got)
+	}
+	ready := domain.RunwayEstimate{Status: "finite", SampleCount: 60, WindowSeconds: 1770, Confidence: "medium"}
+	if got := FormatRunwayBasis(ready); got != "60 · 29m · medium" {
+		t.Fatalf("ready basis = %q", got)
+	}
+}

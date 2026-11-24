@@ -27,6 +27,7 @@ func defaultDeps() deps {
 		},
 		now:          time.Now,
 		runDashboard: runTerminal,
+		setup:        doSetup,
 	}
 }
 
