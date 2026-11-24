@@ -94,7 +94,10 @@ func (s *Store) Resolve(ctx context.Context) (string, error) {
 func (s *Store) EnvironmentToken() string { return s.lookupEnv(EnvToken) }
 
 // Save persists the token to the keyring, falling back to a 0600 file only
-// when the keyring is disabled or unavailable.
+// when the keyring is disabled or unavailable. Because resolution prefers the
+// keyring over the file, a backend transition must never leave two different
+// tokens readable: a successful keyring save clears the old file, and a file
+// fallback is refused while an older keyring entry still survives.
 func (s *Store) Save(ctx context.Context, token string) error {
 	trimmed := strings.TrimSpace(token)
 	if trimmed == "" {
@@ -106,8 +109,23 @@ func (s *Store) Save(ctx context.Context, token string) error {
 
 	if s.keyringEnabled {
 		if err := s.keyring.Set(ServiceName, AccountName, trimmed); err == nil {
-			return nil
+			// The keyring now wins resolution, so a leftover fallback file would
+			// resurrect the previous token if the keyring later went away.
+			return s.removeStaleFile()
 		}
+		// The keyring could not take the token. Falling back to the file is safe
+		// only when no older keyring entry survives, since that entry would keep
+		// winning resolution over the file we are about to write.
+		if s.keyringHoldsToken() {
+			if err := s.keyring.Delete(ServiceName, AccountName); err != nil && !errors.Is(err, ErrKeyringNotFound) {
+				return fmt.Errorf("credentials: the keyring still holds a previous token: %w", err)
+			}
+		}
+	} else if s.keyring != nil {
+		// The keyring is disabled by configuration, yet an entry from an earlier
+		// run would still outrank the file. Clearing it is best effort: the file
+		// save must not depend on keyring availability.
+		_ = s.keyring.Delete(ServiceName, AccountName)
 	}
 
 	if s.tokenFile == "" {
@@ -116,15 +134,39 @@ func (s *Store) Save(ctx context.Context, token string) error {
 	return writeSecretFile(s.tokenFile, trimmed)
 }
 
+// keyringHoldsToken reports whether the keyring currently stores a Kimiburn
+// token. A keyring that cannot be read counts as holding none, which keeps the
+// documented file fallback available when the keyring is simply unreachable.
+func (s *Store) keyringHoldsToken() bool {
+	if s.keyring == nil {
+		return false
+	}
+	v, err := s.keyring.Get(ServiceName, AccountName)
+	return err == nil && strings.TrimSpace(v) != ""
+}
+
+// removeStaleFile deletes a fallback file that a keyring save has superseded.
+func (s *Store) removeStaleFile() error {
+	if s.tokenFile == "" {
+		return nil
+	}
+	if err := os.Remove(s.tokenFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("credentials: remove superseded token file %s: %w", s.tokenFile, err)
+	}
+	return nil
+}
+
 // Logout removes only Kimiburn-owned credentials: its keyring entry and its
-// fallback token file. Cache and configuration are never touched.
+// fallback token file. Cache and configuration are never touched. It always
+// attempts the keyring entry, even when the `keyring` preference is disabled,
+// so flipping that setting cannot strand a previously stored token.
 func (s *Store) Logout(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	var failures []error
-	if s.keyringEnabled {
+	if s.keyring != nil {
 		// Not-found means there is nothing to remove, which is the expected
 		// state. Any other failure means a stored credential may survive, so it
 		// is reported instead of being reported as success.

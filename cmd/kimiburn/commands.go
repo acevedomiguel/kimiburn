@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -61,22 +62,49 @@ func earlyRedact(s string) string {
 	return credentials.NewRedactor(os.Getenv(credentials.EnvToken)).Redact(s)
 }
 
-// storeFor builds the credential store for the resolved paths. Only Kimiburn's
-// own keyring service and fallback file are ever referenced.
+// storeFor builds the credential store for setup, honoring the configured
+// keyring preference. Only Kimiburn's own keyring service and fallback file are
+// ever referenced.
 func storeFor(paths config.Paths, opts options, d deps) (*credentials.Store, error) {
 	cfg, err := resolveConfig(paths, opts)
 	if err != nil {
 		return nil, err
 	}
-	kr := d.keyring
-	if !cfg.Keyring {
-		kr = nil
-	}
+	// The keyring is passed through even when configuration disables it, so a
+	// disabled keyring can still clear a stale entry from an earlier run. A
+	// disabled keyring never gates the file save.
 	return credentials.NewStore(credentials.Options{
-		Keyring:        kr,
+		Keyring:        d.keyring,
 		TokenFile:      paths.TokenFile(),
 		KeyringEnabled: cfg.Keyring,
 	}), nil
+}
+
+// logoutStoreFor builds the store used by logout. Logout must not depend on
+// configuration being valid or on the `keyring` preference: it always attempts
+// Kimiburn's own keyring entry and fallback file so flipping that setting cannot
+// strand a previously stored token.
+func logoutStoreFor(paths config.Paths, d deps) *credentials.Store {
+	return credentials.NewStore(credentials.Options{
+		Keyring:        d.keyring,
+		TokenFile:      paths.TokenFile(),
+		KeyringEnabled: d.keyring != nil,
+	})
+}
+
+// writeSampleIfAbsent writes the sample configuration only when no file exists,
+// so a hand-edited configuration keeps its backend, theme, and interval. It
+// reports whether the sample was written.
+func writeSampleIfAbsent(path string) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return false, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("config: inspect %s: %w", path, err)
+	}
+	if err := config.WriteSample(path); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // doConfigReset restores the sample configuration file.
@@ -95,12 +123,8 @@ func doConfigReset(paths config.Paths, opts options, stdout, stderr io.Writer) i
 
 // doLogout removes locally stored Kimiburn credentials. It never revokes the
 // token at Kimi, because Kimiburn has no remote write access.
-func doLogout(paths config.Paths, opts options, stdout, stderr io.Writer, d deps) int {
-	store, err := storeFor(paths, opts, d)
-	if err != nil {
-		fmt.Fprintf(stderr, "kimiburn: logout: %s\n", earlyRedact(err.Error()))
-		return exitFailure
-	}
+func doLogout(paths config.Paths, stdout, stderr io.Writer, d deps) int {
+	store := logoutStoreFor(paths, d)
 	if err := store.Logout(context.Background()); err != nil {
 		fmt.Fprintf(stderr, "kimiburn: logout: %s\n", earlyRedact(err.Error()))
 		return exitFailure

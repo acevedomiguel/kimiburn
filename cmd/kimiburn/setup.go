@@ -101,12 +101,18 @@ func doSetup(paths config.Paths, opts options, stdin io.Reader, stdout, stderr i
 	if opts.configPath != "" {
 		cfgPath = opts.configPath
 	}
-	if err := config.WriteSample(cfgPath); err != nil {
+	wroteConfig, err := writeSampleIfAbsent(cfgPath)
+	if err != nil {
 		fmt.Fprintf(stderr, "kimiburn: token saved, but the configuration file could not be written: %s\n", redactor.Redact(err.Error()))
 		return exitFailure
 	}
-
-	fmt.Fprintf(stdout, "\nToken saved. Configuration written to %s\n", cfgPath)
+	if wroteConfig {
+		fmt.Fprintf(stdout, "\nToken saved. Configuration written to %s\n", cfgPath)
+	} else {
+		// A hand-edited configuration encodes the user's own backend, theme, and
+		// interval choices, so setup must never overwrite it.
+		fmt.Fprintf(stdout, "\nToken saved. Existing configuration kept at %s\n", cfgPath)
+	}
 	fmt.Fprintln(stdout, "Run `kimiburn` to open the dashboard.")
 	return exitOK
 }

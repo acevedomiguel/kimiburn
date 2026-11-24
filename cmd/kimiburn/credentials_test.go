@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -431,16 +432,123 @@ func TestSetupEarlyConfigErrorRedactsExactEnvironmentToken(t *testing.T) {
 	}
 }
 
-// Logout's early configuration error path has the same obligation.
-func TestLogoutEarlyConfigErrorRedactsExactEnvironmentToken(t *testing.T) {
-	setupEnv(t)
+// Setup must never overwrite an existing configuration, which may encode a
+// deliberate backend, theme, or refresh choice.
+func TestSetupPreservesExistingConfiguration(t *testing.T) {
+	configDir := setupEnv(t)
+	kr := newCLIKeyring()
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(configDir, "config.yaml")
+	existing := []byte("# hand written\nversion: 1\nrefresh_interval: 45s\nbase_url: https://api.kimi.ai/coding/v1\ntheme: dark\ncolor: never\nkeyring: true\n")
+	if err := os.WriteFile(cfgPath, existing, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := testDeps(func(context.Context, string) error { return nil }, kr)
+
+	code, stdout, stderr := runWith([]string{"setup"}, strings.NewReader(cliToken+"\n"), d)
+	if code != exitOK {
+		t.Fatalf("exit = %d, want %d (stderr=%q)", code, exitOK, stderr)
+	}
+	got, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, existing) {
+		t.Errorf("setup must preserve the existing config byte for byte:\n%s", got)
+	}
+	if _, err := kr.Get("kimiburn", "token"); err != nil {
+		t.Errorf("setup should still store the token: %v", err)
+	}
+	if strings.Contains(stdout+stderr, cliToken) {
+		t.Errorf("the token must never be echoed: stdout=%q stderr=%q", stdout, stderr)
+	}
+}
+
+// A disabled keyring must not persist a token while an older keyring entry
+// survives and keeps outranking the file.
+func TestSetupWithDisabledKeyringClearsStaleEntry(t *testing.T) {
+	configDir := setupEnv(t)
+	t.Setenv("KIMIBURN_KEYRING", "false")
+	kr := newCLIKeyring()
+	if err := kr.Set("kimiburn", "token", "stale"); err != nil {
+		t.Fatal(err)
+	}
+	d := testDeps(func(context.Context, string) error { return nil }, kr)
+
+	code, _, stderr := runWith([]string{"setup"}, strings.NewReader(cliToken+"\n"), d)
+	if code != exitOK {
+		t.Fatalf("exit = %d, want %d (stderr=%q)", code, exitOK, stderr)
+	}
+	if _, err := kr.Get("kimiburn", "token"); err == nil {
+		t.Error("a disabled-keyring setup should clear the stale entry")
+	}
+	raw, err := os.ReadFile(filepath.Join(configDir, "token"))
+	if err != nil || strings.TrimSpace(string(raw)) != cliToken {
+		t.Errorf("fallback contents = %q err=%v", raw, err)
+	}
+}
+
+// Logout must remove credentials even when configuration disables the keyring,
+// so flipping the preference cannot strand a previously stored entry.
+func TestLogoutRemovesCredentialsWithKeyringDisabled(t *testing.T) {
+	configDir := setupEnv(t)
+	t.Setenv("KIMIBURN_KEYRING", "false")
+	kr := newCLIKeyring()
+	if err := kr.Set("kimiburn", "token", "stored"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tokenPath := filepath.Join(configDir, "token")
+	if err := os.WriteFile(tokenPath, []byte("file-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := testDeps(func(context.Context, string) error { return nil }, kr)
+
+	code, _, stderr := runWith([]string{"logout"}, errorReader{}, d)
+	if code != exitOK {
+		t.Fatalf("exit = %d, want %d (stderr=%q)", code, exitOK, stderr)
+	}
+	if _, err := kr.Get("kimiburn", "token"); err == nil {
+		t.Error("logout must clear the keyring entry even when the setting disables it")
+	}
+	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
+		t.Errorf("logout must remove the fallback token file: %v", err)
+	}
+}
+
+// Logout must not depend on configuration being parseable: a broken config must
+// not prevent clearing credentials, and the exact environment token must not
+// reappear in the diagnostic.
+func TestLogoutIgnoresInvalidConfigAndDoesNotLeakToken(t *testing.T) {
+	configDir := setupEnv(t)
 	t.Setenv("KIMIBURN_BASE_URL", cliExactToken)
 	t.Setenv(credentials.EnvToken, cliExactToken)
-	d := testDeps(func(context.Context, string) error { return nil }, newCLIKeyring())
+	kr := newCLIKeyring()
+	if err := kr.Set("kimiburn", "token", "stored"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tokenPath := filepath.Join(configDir, "token")
+	if err := os.WriteFile(tokenPath, []byte("file-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := testDeps(func(context.Context, string) error { return nil }, kr)
 
 	code, stdout, stderr := runWith([]string{"logout"}, errorReader{}, d)
-	if code == exitOK {
-		t.Fatalf("invalid configuration must not report success (stderr=%q)", stderr)
+	if code != exitOK {
+		t.Fatalf("exit = %d, want %d; logout must not depend on config validity (stderr=%q)", code, exitOK, stderr)
+	}
+	if _, err := kr.Get("kimiburn", "token"); err == nil {
+		t.Error("logout must remove Kimiburn's keyring entry despite an invalid config")
+	}
+	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
+		t.Errorf("logout must remove the fallback token file: %v", err)
 	}
 	if combined := stdout + stderr; strings.Contains(combined, cliExactToken) {
 		t.Errorf("logout leaked the exact environment token: %q", combined)

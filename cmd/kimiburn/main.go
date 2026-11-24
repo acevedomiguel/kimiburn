@@ -107,7 +107,7 @@ func runWithDeps(args []string, stdin io.Reader, stdout, stderr io.Writer, d dep
 	case "setup":
 		return doSetup(paths, opts, stdin, stdout, stderr, d)
 	case "logout":
-		return doLogout(paths, opts, stdout, stderr, d)
+		return doLogout(paths, stdout, stderr, d)
 	}
 
 	fmt.Fprint(stderr, "kimiburn: missing command\n\n")

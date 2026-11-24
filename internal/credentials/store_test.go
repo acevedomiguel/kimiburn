@@ -11,8 +11,10 @@ import (
 
 // fakeKeyring is an in-memory keyring so tests never touch the real one.
 type fakeKeyring struct {
-	values map[string]string
-	fail   bool
+	values     map[string]string
+	fail       bool
+	failSet    bool
+	failDelete bool
 }
 
 func newFakeKeyring() *fakeKeyring { return &fakeKeyring{values: map[string]string{}} }
@@ -29,7 +31,7 @@ func (f *fakeKeyring) Get(service, user string) (string, error) {
 }
 
 func (f *fakeKeyring) Set(service, user, secret string) error {
-	if f.fail {
+	if f.fail || f.failSet {
 		return ErrKeyringUnavailable
 	}
 	f.values[service+"/"+user] = secret
@@ -37,7 +39,7 @@ func (f *fakeKeyring) Set(service, user, secret string) error {
 }
 
 func (f *fakeKeyring) Delete(service, user string) error {
-	if f.fail {
+	if f.fail || f.failDelete {
 		return ErrKeyringUnavailable
 	}
 	key := service + "/" + user
@@ -189,8 +191,8 @@ func TestSaveFallsBackToFileWhenKeyringUnavailable(t *testing.T) {
 		t.Errorf("fallback contents = %q err=%v", raw, err)
 	}
 	// Windows synthesises file modes, so POSIX bits are asserted only where the
-	// OS actually enforces them; there the 0700 directory carries the
-	// protection instead.
+	// OS actually enforces them. On Windows the file is protected by the ACL
+	// inherited from the per-user profile directory, not by a mode bit.
 	if PermissionsAreEnforced {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -348,6 +350,234 @@ func TestLogoutReportsUnavailableKeyringButRemovesFile(t *testing.T) {
 	}
 	if _, statErr := os.Stat(tokenPath); !os.IsNotExist(statErr) {
 		t.Errorf("logout must still remove the fallback file: %v", statErr)
+	}
+}
+
+// Once the keyring holds the token, a stale fallback file must not survive:
+// otherwise a later keyring outage would silently resurrect the old token.
+func TestSaveReportsStaleFileCleanupFailure(t *testing.T) {
+	kr := newFakeKeyring()
+	dir := t.TempDir()
+	tokenPath := filepath.Join(dir, "token")
+	// A non-empty directory cannot be removed, so cleanup must fail.
+	if err := os.MkdirAll(filepath.Join(tokenPath, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s := NewStore(Options{Keyring: kr, TokenFile: tokenPath, KeyringEnabled: true})
+
+	err := s.Save(context.Background(), "new-token")
+	if err == nil {
+		t.Fatal("Save must report a failure to remove the stale fallback file")
+	}
+	if kr.values[ServiceName+"/"+AccountName] != "new-token" {
+		t.Errorf("the keyring save itself already succeeded: %v", kr.values)
+	}
+}
+
+// A disabled keyring must not leave an accessible stale entry that would keep
+// outranking the file we are about to write.
+func TestSaveWithDisabledKeyringClearsAccessibleStaleEntry(t *testing.T) {
+	kr := newFakeKeyring()
+	if err := kr.Set(ServiceName, AccountName, "old-keyring-token"); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	s := NewStore(Options{
+		Keyring:        kr,
+		TokenFile:      filepath.Join(dir, "token"),
+		KeyringEnabled: false,
+	})
+
+	if err := s.Save(context.Background(), "file-token"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if _, err := kr.Get(ServiceName, AccountName); err == nil {
+		t.Error("a disabled-keyring save should clear an accessible stale entry")
+	}
+	if raw, err := os.ReadFile(filepath.Join(dir, "token")); err != nil || string(raw) != "file-token" {
+		t.Errorf("fallback contents = %q err=%v", raw, err)
+	}
+}
+
+// A successful save must not leave a temporary file behind.
+func TestWriteSecretFileLeavesNoTemporaryFilesOnSuccess(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token")
+	if err := writeSecretFile(path, "secret-value"); err != nil {
+		t.Fatalf("writeSecretFile: %v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "token" {
+		t.Errorf("directory should hold only the token file: %v", entries)
+	}
+}
+
+// A failed replacement must not leave a temporary file that holds the secret.
+func TestWriteSecretFileCleansUpTemporaryFileOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	// A directory at the target path makes the final rename fail.
+	path := filepath.Join(dir, "token")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeSecretFile(path, "secret-value"); err == nil {
+		t.Fatal("writing over a directory must fail")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != "token" {
+			t.Errorf("a failed write leaked a temporary file: %s", e.Name())
+		}
+	}
+}
+
+// Replacement must overwrite an existing token rather than reuse its mode.
+func TestWriteSecretFileReplacesExistingContent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token")
+	if err := os.WriteFile(path, []byte("old-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeSecretFile(path, "new-token"); err != nil {
+		t.Fatalf("writeSecretFile: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || string(raw) != "new-token" {
+		t.Errorf("contents = %q err=%v, want the replacement", raw, err)
+	}
+}
+
+// A successful write must produce an owner-only file on POSIX systems.
+func TestWriteSecretFileIsOwnerOnly(t *testing.T) {
+	if !PermissionsAreEnforced {
+		t.Skip("POSIX permission bits are not enforced on this platform")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token")
+	if err := writeSecretFile(path, "secret-value"); err != nil {
+		t.Fatalf("writeSecretFile: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("mode = %o, want 0600", perm)
+	}
+}
+
+// Logout must be independent of the keyring resolution preference: turning the
+// keyring off in config must not strand a previously stored entry.
+func TestLogoutDeletesKeyringEntryEvenWhenDisabled(t *testing.T) {
+	kr := newFakeKeyring()
+	if err := kr.Set(ServiceName, AccountName, "stored"); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	s := NewStore(Options{
+		Keyring:        kr,
+		TokenFile:      filepath.Join(dir, "token"),
+		KeyringEnabled: false,
+	})
+	tokenPath := filepath.Join(dir, "token")
+	if err := os.WriteFile(tokenPath, []byte("file-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Logout(context.Background()); err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+	if _, err := kr.Get(ServiceName, AccountName); err == nil {
+		t.Error("logout must clear Kimiburn's keyring entry even with the keyring disabled")
+	}
+	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
+		t.Errorf("logout must remove the fallback file: %v", err)
+	}
+}
+
+// A disabled keyring must not stop file save from succeeding.
+func TestSaveWithDisabledKeyringIgnoresUnreachableKeyring(t *testing.T) {
+	kr := newFakeKeyring()
+	kr.fail = true
+	dir := t.TempDir()
+	s := NewStore(Options{
+		Keyring:        kr,
+		TokenFile:      filepath.Join(dir, "token"),
+		KeyringEnabled: false,
+	})
+
+	if err := s.Save(context.Background(), "file-token"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if raw, err := os.ReadFile(filepath.Join(dir, "token")); err != nil || string(raw) != "file-token" {
+		t.Errorf("fallback contents = %q err=%v", raw, err)
+	}
+}
+
+// Saving to the keyring must not leave a stale fallback file behind, because a
+// later keyring outage would silently resurrect the old token.
+func TestSaveRemovesStaleFallbackFileAfterKeyringSave(t *testing.T) {
+	kr := newFakeKeyring()
+	s, dir := newStore(t, kr)
+	tokenPath := filepath.Join(dir, "token")
+	if err := os.WriteFile(tokenPath, []byte("stale-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Save(context.Background(), "new-token"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
+		t.Errorf("a keyring save must clear the stale fallback file: %v", err)
+	}
+	if kr.values[ServiceName+"/"+AccountName] != "new-token" {
+		t.Errorf("keyring = %v, want the new token", kr.values)
+	}
+}
+
+// Falling back to file while an old keyring entry exists would leave two
+// different tokens readable, so the save must fail instead of claiming success.
+func TestSaveFailsWhenStaleKeyringEntryCannotBeCleared(t *testing.T) {
+	kr := newFakeKeyring()
+	if err := kr.Set(ServiceName, AccountName, "old-keyring-token"); err != nil {
+		t.Fatal(err)
+	}
+	kr.failSet = true
+	kr.failDelete = true
+	s, dir := newStore(t, kr)
+
+	err := s.Save(context.Background(), "new-token")
+	if err == nil {
+		t.Fatal("Save must not report success while the old keyring entry survives")
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "token")); !os.IsNotExist(statErr) {
+		t.Errorf("a failed save must not write the fallback file: %v", statErr)
+	}
+	if kr.values[ServiceName+"/"+AccountName] != "old-keyring-token" {
+		t.Errorf("the stale entry must be left untouched for the user to inspect: %v", kr.values)
+	}
+}
+
+// When the keyring is simply unavailable and no entry exists, the documented
+// file fallback stays available.
+func TestSaveStillFallsBackToFileWhenKeyringHasNoEntry(t *testing.T) {
+	kr := newFakeKeyring()
+	kr.fail = true
+	s, dir := newStore(t, kr)
+
+	if err := s.Save(context.Background(), "new-token"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "token"))
+	if err != nil || string(raw) != "new-token" {
+		t.Errorf("fallback contents = %q err=%v", raw, err)
 	}
 }
 
