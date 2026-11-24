@@ -1,0 +1,50 @@
+version: 2
+
+project_name: kimiburn
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kimiburn
+    main: ./cmd/kimiburn
+    binary: kimiburn
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: kimiburn
+    ids:
+      - kimiburn
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  use: git
+
+release:
+  prerelease: auto
