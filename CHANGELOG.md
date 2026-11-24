@@ -1,3 +1,9 @@
+## [1.1.3](https://github.com/acevedomiguel/kimiburn/compare/v1.1.2...v1.1.3) (2026-11-24)
+
+### Bug Fixes
+
+* render the demo and README from the same synthetic fixture ([#5](https://github.com/acevedomiguel/kimiburn/issues/5)) ([744fbb8](https://github.com/acevedomiguel/kimiburn/commit/744fbb8855e8ba2a12a4470c1684eb046bf01437))
+
 ## [1.1.2](https://github.com/acevedomiguel/kimiburn/compare/v1.1.1...v1.1.2) (2026-11-24)
 
 ### Bug Fixes
