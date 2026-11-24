@@ -95,6 +95,9 @@ func (m Model) applyRefresh(result RefreshResult) Model {
 		return m
 	}
 	m.snapshot, m.cached, m.state, m.warning = result.Snapshot, false, ViewReady, ""
+	if result.History != nil {
+		m.history = result.History
+	}
 	if result.Manual {
 		m.suspended, m.manualSuccess = false, true
 	}

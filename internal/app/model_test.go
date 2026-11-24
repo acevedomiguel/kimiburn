@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/acevedomiguel/kimiburn/internal/ui"
 )
@@ -59,23 +60,43 @@ func TestResizeAndWarmCacheControls(t *testing.T) {
 	}
 }
 
-func TestEscapeQuitsFromDashboardAndHelp(t *testing.T) {
-	for _, help := range []bool{false, true} {
-		cancelled := false
-		m := NewModel(Options{Cancel: func() { cancelled = true }, Snapshot: ui.SyntheticSnapshot()})
-		if help {
-			m = m.openHelp()
-		}
-		_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-		if cmd == nil {
-			t.Fatalf("escape returned no quit command (help=%t)", help)
-		}
-		if _, ok := cmd().(tea.QuitMsg); !ok {
-			t.Fatalf("escape did not quit (help=%t)", help)
-		}
-		if !cancelled {
-			t.Fatalf("escape did not cancel application work (help=%t)", help)
-		}
+func TestEscapeQuitsFromDashboardButClosesHelp(t *testing.T) {
+	cancelled := false
+	m := NewModel(Options{Cancel: func() { cancelled = true }, Snapshot: ui.SyntheticSnapshot()})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if cmd == nil {
+		t.Fatal("escape on the dashboard returned no quit command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("escape on the dashboard did not quit")
+	}
+	if !cancelled {
+		t.Fatal("escape did not cancel application work")
+	}
+
+	// In Help, Esc behaves like RouteBurn: it closes the overlay and keeps the
+	// dashboard's scroll position.
+	cancelled = false
+	m = NewModel(Options{Cancel: func() { cancelled = true }, Snapshot: ui.SyntheticSnapshot()})
+	m.scroll = 2
+	m = m.openHelp()
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = updated.(Model)
+	if cmd != nil || cancelled {
+		t.Fatal("escape in Help quit the app")
+	}
+	if m.state != ViewReady || m.scroll != 2 {
+		t.Fatalf("escape in Help: state=%v scroll=%d, want the dashboard at scroll 2", m.state, m.scroll)
+	}
+
+	// ctrl+c still quits from Help.
+	m = m.openHelp()
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Fatal("ctrl+c in Help returned no quit command")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("ctrl+c in Help did not quit")
 	}
 }
 
@@ -126,7 +147,7 @@ func TestHelpAndScrollRestore(t *testing.T) {
 	if view.AltScreen != true {
 		t.Fatal("interactive view must use alt screen")
 	}
-	if !strings.Contains(view.Content, "[r] refresh") {
+	if !strings.Contains(ansi.Strip(view.Content), "[r] refresh") {
 		t.Fatal("footer missing refresh binding")
 	}
 	for _, forbidden := range []string{"[tab]", "[←→]", "tokens"} {
@@ -138,7 +159,7 @@ func TestHelpAndScrollRestore(t *testing.T) {
 
 func TestHelpExplainsRunwayStatesWithoutConfidenceLabels(t *testing.T) {
 	m := NewModel(Options{Width: 100, Height: 40, Snapshot: ui.SyntheticSnapshot()})
-	help := strings.Join(m.helpLines(), "\n")
+	help := strings.Join(m.helpLines(), " ")
 	for _, phrase := range []string{"Monthly Code allocation", "not a server-provided prediction", "Beyond reset", "No consumption", "Depleted", "insufficient samples", "reset"} {
 		if !strings.Contains(help, phrase) {
 			t.Fatalf("help lacks %q:\n%s", phrase, help)
@@ -194,7 +215,7 @@ func TestDemoManualRefreshReloadsSyntheticDataWithoutWarning(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("demo refresh returned no command")
 	}
-	updated, _ = m.Update(cmd())
+	updated, _ = m.Update(refreshMsg(t, cmd))
 	m = updated.(Model)
 	if m.state != ViewReady || m.warning != "" {
 		t.Fatalf("demo refresh state=%v warning=%q", m.state, m.warning)
@@ -212,5 +233,38 @@ func TestModelEnablesColorByDefaultAndHonorsNoColor(t *testing.T) {
 	plain := NewModel(Options{Width: 100, Height: 40, Snapshot: ui.SyntheticSnapshot(), NoColor: true}).View().Content
 	if strings.Contains(plain, "\x1b[") {
 		t.Fatal("--no-color dashboard contains ANSI styling")
+	}
+}
+
+// refreshMsg runs a (possibly batched) command and returns the refresh result
+// in it. Batched timers such as the spinner run concurrently and are ignored.
+func refreshMsg(t *testing.T, cmd tea.Cmd) tea.Msg {
+	t.Helper()
+	found := make(chan tea.Msg, 16)
+	var run func(tea.Cmd)
+	run = func(cmd tea.Cmd) {
+		if cmd == nil {
+			return
+		}
+		go func() {
+			msg := cmd()
+			if batch, ok := msg.(tea.BatchMsg); ok {
+				for _, sub := range batch {
+					run(sub)
+				}
+				return
+			}
+			if _, ok := msg.(refreshFinishedMsg); ok {
+				found <- msg
+			}
+		}()
+	}
+	run(cmd)
+	select {
+	case msg := <-found:
+		return msg
+	case <-time.After(2 * time.Second):
+		t.Fatal("command produced no refresh result")
+		return nil
 	}
 }

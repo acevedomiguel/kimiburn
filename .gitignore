@@ -9,6 +9,8 @@
 /kimiburn.exe
 /dist/
 /node_modules/
+/test-results/
+/lighthouse-report/
 
 # Local credential and configuration files that must never be committed
 /token

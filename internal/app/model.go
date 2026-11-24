@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -38,6 +40,9 @@ type RefreshResult struct {
 	Err         error
 	AuthFailure bool
 	NextAllowed time.Time
+	// History is a copy of the retained local samples after this reading; nil
+	// leaves the displayed history unchanged.
+	History map[domain.QuotaKey][]domain.Sample
 }
 
 type RefreshFunc func(context.Context, RefreshRequest) RefreshResult
@@ -49,6 +54,7 @@ type CacheResult struct {
 
 type initMsg struct{}
 type tickMsg struct{}
+type clockMsg struct{}
 type cacheLoadedMsg CacheResult
 type refreshFinishedMsg RefreshResult
 
@@ -60,22 +66,37 @@ type Options struct {
 	Refresh     RefreshFunc
 	Demo        bool
 	Snapshot    domain.Snapshot
+	History     map[domain.QuotaKey][]domain.Sample
 	Width       int
 	Height      int
 	NoColor     bool
 	Interval    time.Duration
 	IntervalSet bool
 	Warning     string
+	// Theme is the configured palette: "dark" or "light" pin it, and "auto"
+	// or empty follows the terminal's reported background colour.
+	Theme string
+	// TerminalProgress mirrors the 5-hour quota into the terminal's own
+	// progress indicator (OSC 9;4), for terminals known to support it.
+	TerminalProgress bool
 }
 
 // Model is the complete Bubble Tea state for one Kimiburn process.
 type Model struct {
 	state         viewState
 	snapshot      domain.Snapshot
+	history       map[domain.QuotaKey][]domain.Sample
 	cached        bool
 	width         int
 	height        int
+	noColor       bool
+	theme         string
 	styles        ui.Styles
+	keys          ui.KeyMap
+	helpKeys      ui.HelpKeyMap
+	spinner       spinner.Model
+	meters        map[domain.QuotaKey]meter
+	meterGen      uint64
 	scroll        int
 	savedState    viewState
 	savedScroll   int
@@ -86,6 +107,8 @@ type Model struct {
 	configured    func() (bool, error)
 	refresh       RefreshFunc
 	demo          bool
+	termProgress  bool
+	started       bool
 	inFlight      bool
 	generation    uint64
 	manual        uint64
@@ -93,6 +116,7 @@ type Model struct {
 	suspended     bool
 	lastAttempt   time.Time
 	nextAllowed   time.Time
+	nextTick      time.Time
 	warning       string
 	notice        string
 	errText       string
@@ -111,26 +135,44 @@ func NewModel(opts Options) Model {
 	if !opts.IntervalSet && opts.Interval == 0 {
 		opts.Interval = 30 * time.Second
 	}
+	if opts.Demo {
+		// The demo clock starts at the fixture's reading time and advances in
+		// real time, so its countdowns tick down from the README values.
+		wall := opts.Now
+		start := wall()
+		opts.Now = func() time.Time { return ui.SyntheticTime().Add(wall().Sub(start)) }
+		if opts.History == nil {
+			opts.History = ui.SyntheticHistory()
+		}
+	}
 	if opts.Demo && opts.Refresh == nil {
 		opts.Refresh = func(_ context.Context, request RefreshRequest) RefreshResult {
 			// The demo renders the same fixture the README screenshot shows, so
 			// `kimiburn demo` reproduces that image.
-			return RefreshResult{Generation: request.Generation, Manual: request.Manual, Snapshot: ui.SyntheticLegacySnapshot()}
+			return RefreshResult{Generation: request.Generation, Manual: request.Manual, Snapshot: ui.SyntheticLegacySnapshot(), History: ui.SyntheticHistory()}
 		}
 	}
 	state := ViewLoading
 	if opts.Snapshot.GeneratedAt.IsZero() == false {
 		state = ViewReady
 	}
+	styles := ui.NewStylesFor(!opts.NoColor, opts.Theme != "light")
 	return Model{
-		state: state, snapshot: opts.Snapshot, width: opts.Width, height: opts.Height,
-		styles: ui.NewStyles(!opts.NoColor), interval: opts.Interval, now: opts.Now,
+		state: state, snapshot: opts.Snapshot, history: opts.History, width: opts.Width, height: opts.Height,
+		noColor: opts.NoColor, theme: opts.Theme, styles: styles, keys: ui.NewKeyMap(), helpKeys: ui.NewHelpKeyMap(),
+		spinner: ui.NewSpinner(styles), interval: opts.Interval, now: opts.Now,
 		cancel: opts.Cancel, configured: opts.Configured, refresh: opts.Refresh,
-		demo: opts.Demo, warning: opts.Warning,
+		demo: opts.Demo, termProgress: opts.TerminalProgress, warning: opts.Warning,
 	}
 }
 
 func (m Model) Init() tea.Cmd { return func() tea.Msg { return initMsg{} } }
+
+// clockTick re-renders once a second so reset countdowns and the next-refresh
+// caption stay current between readings. It performs no I/O.
+func clockTick() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return clockMsg{} })
+}
 
 // stateInit selects the first screen without performing I/O itself.
 func stateInit(m Model, _ time.Time) Model {
@@ -157,97 +199,162 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case initMsg:
 		m = stateInit(m, m.now())
 		if m.state == ViewSetup || m.state == ViewFatal {
-			return m, nil
+			return m, m.startup()
 		}
+		// The first read is returned on its own; the rest of the startup work
+		// follows its result, so the first message is always the reading.
 		cmd, _ := m.StartAttempt(false)
 		return m, cmd
+	case tea.BackgroundColorMsg:
+		if m.theme == "dark" || m.theme == "light" {
+			return m, nil
+		}
+		m.styles = ui.NewStylesFor(!m.noColor, msg.IsDark())
+		m.spinner.Style = ui.NewSpinner(m.styles).Style
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.scroll = minInt(maxInt(0, m.scroll), m.maxScroll())
 		return m, nil
 	case refreshFinishedMsg:
-		result := RefreshResult(msg)
-		m = m.applyRefresh(result)
-		return m, m.scheduleTick(m.now())
+		m = m.applyRefresh(RefreshResult(msg))
+		startup := m.startup()
+		meters := m.syncMeters()
+		tick := m.armTick()
+		return m, tea.Batch(startup, meters, tick)
 	case cacheLoadedMsg:
 		m = m.applyCache(CacheResult(msg))
-		return m, m.scheduleTick(m.now())
+		startup := m.startup()
+		meters := m.syncMeters()
+		tick := m.armTick()
+		return m, tea.Batch(startup, meters, tick)
 	case tickMsg:
-		cmd, _ := m.StartAttempt(false)
-		return m, tea.Batch(cmd, m.scheduleTick(m.now()))
+		attempt := m.startAttempt(false)
+		tick := m.armTick()
+		return m, tea.Batch(attempt, tick)
+	case clockMsg:
+		return m, clockTick()
+	case meterFrameMsg:
+		cmd := m.stepMeters(msg)
+		return m, cmd
+	case spinner.TickMsg:
+		if !m.inFlight {
+			// Stop animating once nothing is in flight.
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+	case tea.MouseWheelMsg:
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.scrollBy(-3)
+		case tea.MouseWheelDown:
+			m.scrollBy(3)
+		}
+		return m, nil
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
 }
 
-func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	if key == "esc" {
-		if m.cancel != nil {
-			m.cancel()
-		}
-		if m.cancelAttempt != nil {
-			m.cancelAttempt()
-		}
-		return m, tea.Quit
+// startup runs once: it asks the terminal for its background colour, so the
+// palette suits light and dark themes, and starts the one-second clock that
+// keeps countdowns live. Neither performs provider I/O.
+func (m *Model) startup() tea.Cmd {
+	if m.started {
+		return nil
 	}
+	m.started = true
+	return tea.Batch(tea.RequestBackgroundColor, clockTick())
+}
+
+// startAttempt wraps StartAttempt with the spinner that marks it in flight.
+func (m *Model) startAttempt(manual bool) tea.Cmd {
+	cmd, ok := m.StartAttempt(manual)
+	if !ok {
+		return nil
+	}
+	return tea.Batch(cmd, m.spinner.Tick)
+}
+
+// armTick schedules the next automatic read and remembers when it is due, for
+// the countdown in the freshness caption.
+func (m *Model) armTick() tea.Cmd {
+	now := m.now()
+	delay, _ := m.ScheduleDelay(now, m.interval)
+	m.nextTick = now.Add(delay)
+	return m.scheduleTick(now)
+}
+
+func (m *Model) scrollBy(delta int) {
+	switch m.state {
+	case ViewReady:
+		m.scroll = minInt(maxInt(0, m.scroll+delta), m.maxScroll())
+	case ViewHelp:
+		m.scroll = minInt(maxInt(0, m.scroll+delta), m.maxHelpScroll())
+	}
+}
+
+func (m Model) quit() (tea.Model, tea.Cmd) {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	if m.cancelAttempt != nil {
+		m.cancelAttempt()
+	}
+	return m, tea.Quit
+}
+
+func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	page := maxInt(1, m.height-3)
 	if m.state == ViewHelp {
-		switch key {
-		case "q", "?":
+		// Esc, ? and q close the overlay and return to the dashboard; only
+		// ctrl+c quits from here.
+		switch {
+		case key.Matches(msg, m.helpKeys.Close):
 			m.state, m.scroll = m.savedState, m.savedScroll
-		case "up", "k":
-			m.scroll = maxInt(0, m.scroll-1)
-		case "down", "j":
-			m.scroll = minInt(m.scroll+1, m.maxHelpScroll())
-		case "pgup":
-			m.scroll = maxInt(0, m.scroll-(m.height-3))
-		case "pgdown":
-			m.scroll = minInt(m.scroll+(m.height-3), m.maxHelpScroll())
-		case "home":
+		case key.Matches(msg, m.helpKeys.Quit):
+			return m.quit()
+		case key.Matches(msg, m.keys.Up):
+			m.scrollBy(-1)
+		case key.Matches(msg, m.keys.Down):
+			m.scrollBy(1)
+		case key.Matches(msg, m.keys.PageUp):
+			m.scrollBy(-page)
+		case key.Matches(msg, m.keys.PageDown):
+			m.scrollBy(page)
+		case key.Matches(msg, m.keys.Home):
 			m.scroll = 0
-		case "end":
+		case key.Matches(msg, m.keys.End):
 			m.scroll = m.maxHelpScroll()
 		}
 		return m, nil
 	}
-	switch key {
-	case "q", "ctrl+c":
-		if m.cancel != nil {
-			m.cancel()
-		}
-		if m.cancelAttempt != nil {
-			m.cancelAttempt()
-		}
-		return m, tea.Quit
-	case "r":
-		cmd, _ := m.StartAttempt(true)
+	switch {
+	case key.Matches(msg, m.keys.Quit), key.Matches(msg, m.keys.Escape):
+		return m.quit()
+	case key.Matches(msg, m.keys.Refresh):
+		cmd := m.startAttempt(true)
 		return m, cmd
-	case "?":
+	case key.Matches(msg, m.keys.Help):
 		if m.state == ViewReady {
 			m = m.openHelp()
 		}
-	case "up", "k":
-		if m.state == ViewReady {
-			m.scroll = maxInt(0, m.scroll-1)
-		}
-	case "down", "j":
-		if m.state == ViewReady {
-			m.scroll = minInt(m.scroll+1, m.maxScroll())
-		}
-	case "pgup":
-		if m.state == ViewReady {
-			m.scroll = maxInt(0, m.scroll-(m.height-3))
-		}
-	case "pgdown":
-		if m.state == ViewReady {
-			m.scroll = minInt(m.scroll+(m.height-3), m.maxScroll())
-		}
-	case "home":
+	case key.Matches(msg, m.keys.Up):
+		m.scrollBy(-1)
+	case key.Matches(msg, m.keys.Down):
+		m.scrollBy(1)
+	case key.Matches(msg, m.keys.PageUp):
+		m.scrollBy(-page)
+	case key.Matches(msg, m.keys.PageDown):
+		m.scrollBy(page)
+	case key.Matches(msg, m.keys.Home):
 		if m.state == ViewReady {
 			m.scroll = 0
 		}
-	case "end":
+	case key.Matches(msg, m.keys.End):
 		if m.state == ViewReady {
 			m.scroll = m.maxScroll()
 		}
@@ -255,13 +362,31 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// dashboardOptions is the single description of the dashboard frame, shared by
+// rendering and by scroll-limit measurement.
+func (m Model) dashboardOptions(scroll int) ui.DashboardOptions {
+	next := time.Time{}
+	if !m.suspended && m.interval > 0 {
+		next = m.nextTick
+	}
+	return ui.DashboardOptions{
+		Width: m.width, Height: m.height, Now: m.now(), Cached: m.cached, Demo: m.demo,
+		Styles: m.styles, Warning: m.warning, Scroll: scroll,
+		History: m.history, Meters: m.shownMeters(),
+		Refreshing: m.inFlight, Spinner: m.spinner.View(), NextRefresh: next,
+	}
+}
+
 func (m Model) View() tea.View {
 	var content string
 	switch m.state {
 	case ViewReady:
-		content = ui.RenderDashboard(m.snapshot, ui.DashboardOptions{Width: m.width, Height: m.height, Now: m.now(), Cached: m.cached, Demo: m.demo, Styles: m.styles, Warning: m.warning, Scroll: m.scroll})
+		content = ui.RenderDashboard(m.snapshot, m.dashboardOptions(m.scroll))
 	case ViewHelp:
-		content = m.renderHelp()
+		opts := m.dashboardOptions(m.savedScroll)
+		opts.HelpOpen = true
+		background := ui.RenderDashboard(m.snapshot, opts)
+		content = ui.HelpOverlay(background, m.styles, m.width, m.height, m.scroll, m.warnings())
 	case ViewSetup:
 		body := "Token setup required\n\nRun: kimiburn setup\n\nThe interactive app never reads a token from the terminal."
 		if m.notice != "" {
@@ -272,11 +397,63 @@ func (m Model) View() tea.View {
 		body := "Refresh failed\n\n" + m.errText
 		content = renderSimpleFrame("KIMIBURN · Error", body, "[q] quit", m.width, m.height, m.styles)
 	default:
-		content = renderSimpleFrame("KIMIBURN", "Loading latest Kimi Code quota…", "[q] quit", m.width, m.height, m.styles)
+		loading := "Loading latest Kimi Code quota…"
+		if m.inFlight {
+			loading = m.spinner.View() + " " + loading
+		}
+		content = renderSimpleFrame("KIMIBURN", loading, "[q] quit", m.width, m.height, m.styles)
 	}
 	view := tea.NewView(content)
 	view.AltScreen = true
+	view.MouseMode = tea.MouseModeCellMotion
+	view.WindowTitle = m.windowTitle()
+	if m.termProgress {
+		view.ProgressBar = m.terminalProgress()
+	}
 	return view
+}
+
+// fiveHour returns the 5-hour quota's remaining fraction when it is valid.
+func (m Model) fiveHour() (float64, bool) {
+	if m.state != ViewReady && m.state != ViewHelp {
+		return 0, false
+	}
+	quota, ok := m.snapshot.Quotas[domain.QuotaLimit5h]
+	if !ok || quota.UsedRatio == nil || *quota.UsedRatio < 0 || *quota.UsedRatio > 1 {
+		return 0, false
+	}
+	return 1 - *quota.UsedRatio, true
+}
+
+// windowTitle puts the most time-critical figures in the terminal tab.
+func (m Model) windowTitle() string {
+	remaining, ok := m.fiveHour()
+	if !ok {
+		return "kimiburn"
+	}
+	title := "kimiburn · 5h " + ui.FormatPercent(&remaining) + " left"
+	if runway := m.snapshot.Runways[domain.QuotaLimit5h]; runway.Status == "finite" {
+		title += " · runway " + ui.FormatRunway(runway, domain.QuotaLimit5h)
+	}
+	return title
+}
+
+// terminalProgress mirrors the 5-hour quota into the terminal's progress
+// indicator: a warning when it runs out before reset or has under a fifth
+// left, an error when depleted.
+func (m Model) terminalProgress() *tea.ProgressBar {
+	remaining, ok := m.fiveHour()
+	if !ok {
+		return tea.NewProgressBar(tea.ProgressBarNone, 0)
+	}
+	state := tea.ProgressBarDefault
+	switch status := m.snapshot.Runways[domain.QuotaLimit5h].Status; {
+	case status == "depleted" || remaining <= 0:
+		state = tea.ProgressBarError
+	case status == "finite" || remaining < 0.2:
+		state = tea.ProgressBarWarning
+	}
+	return tea.NewProgressBar(state, int(remaining*100+0.5))
 }
 
 func (m Model) openHelp() Model {
@@ -285,69 +462,38 @@ func (m Model) openHelp() Model {
 	return m
 }
 
-func (m Model) helpLines() []string {
-	lines := []string{
-		"KIMIBURN · Help",
-		"",
-		"Monthly membership is the shared membership quota. Monthly Code allocation",
-		"is included in that membership, not an additional allowance.",
-		"Runway is estimated locally from retained readings and bounded by reset time.",
-		"It is approximate, not a server-provided prediction.",
-		"Finite forecasts stop strictly before reset; Beyond reset has no timestamp.",
-		"No consumption means burn was zero/negative; Depleted means 100% used.",
-		"Unavailable · insufficient samples needs 5 samples over at least 120 seconds.",
-		"A reset or ratio decrease clears only that quota's local history.",
-		"",
-		"[r] refresh   [↑↓/j/k] scroll   [pgup/pgdn] page   [home/end] jump",
-		"[?] help   [q] quit",
-		"",
-		"Warnings:",
-	}
+// warnings lists every current warning for the Help overlay.
+func (m Model) warnings() []string {
+	var out []string
 	if m.warning != "" {
-		lines = append(lines, wrapPlainText(m.warning, maxInt(20, m.width-2))...)
+		out = append(out, m.warning)
 	}
 	for _, warning := range m.snapshot.Warnings {
-		lines = append(lines, wrapPlainText(warning.Section+": "+warning.Message, maxInt(20, m.width-2))...)
+		out = append(out, warning.Section+": "+warning.Message)
 	}
 	if m.notice != "" {
-		lines = append(lines, wrapPlainText(m.notice, maxInt(20, m.width-2))...)
+		out = append(out, m.notice)
 	}
-	if m.warning == "" && len(m.snapshot.Warnings) == 0 && m.notice == "" {
-		lines = append(lines, "None")
-	}
-	return lines
+	return out
 }
 
-func (m Model) renderHelp() string {
-	lines := m.helpLines()
-	bodyHeight := maxInt(1, m.height-2)
-	scroll := minInt(m.scroll, maxInt(0, len(lines)-bodyHeight))
-	end := minInt(len(lines), scroll+bodyHeight)
-	out := make([]string, 0, m.height)
-	out = append(out, fitLine(m.styles.Title.Render("KIMIBURN · Details"), m.width))
-	for _, line := range lines[scroll:end] {
-		out = append(out, fitLine(line, m.width))
-	}
-	for len(out) < m.height-1 {
-		out = append(out, strings.Repeat(" ", m.width))
-	}
-	out = append(out, fitLine("[↑↓/j/k] scroll · [?/q] close · [esc] quit", m.width))
-	return strings.Join(out[:m.height], "\n")
+// helpLines is the Help document as the overlay lays it out.
+func (m Model) helpLines() []string {
+	return ui.HelpContent(m.styles, ui.HelpTextWidth(m.width), m.warnings())
 }
 
 func (m Model) maxScroll() int {
 	if m.state != ViewReady {
 		return 0
 	}
-	chrome := 2
-	if m.warning != "" || len(m.snapshot.Warnings) > 0 {
-		chrome++
-	}
-	bodyHeight := maxInt(1, m.height-chrome)
-	return maxInt(0, len(ui.BuildDashboardBody(m.snapshot, ui.DashboardOptions{Width: m.width, Height: m.height, Now: m.now(), Cached: m.cached, Styles: m.styles}))-bodyHeight)
+	body := ui.BuildDashboardBody(m.snapshot, m.dashboardOptions(0))
+	bodyHeight := ui.BodyHeight(m.height, ui.DashboardWarning(m.snapshot, m.warning) != "")
+	return maxInt(0, len(body)-bodyHeight)
 }
 
-func (m Model) maxHelpScroll() int { return maxInt(0, len(m.helpLines())-(m.height-2)) }
+func (m Model) maxHelpScroll() int {
+	return ui.HelpScrollLimit(m.styles, m.width, m.height, m.warnings())
+}
 
 func renderSimpleFrame(title, body, footer string, width, height int, styles ui.Styles) string {
 	width, height = maxInt(1, width), maxInt(1, height)

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kimiburn — Kimi Code quota runway in your terminal</title>
+<meta name="description" content="Kimiburn is a read-only terminal monitor for Kimi Code membership quotas: the 5-hour window, the monthly membership, and a local runway estimate that tells you whether you run out before the reset.">
+<link rel="canonical" href="https://acevedomiguel.github.io/kimiburn/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kimiburn — Kimi Code quota runway in your terminal">
+<meta property="og:description" content="A read-only terminal monitor for Kimi Code membership quotas and runway.">
+<meta property="og:url" content="https://acevedomiguel.github.io/kimiburn/">
+<meta property="og:image" content="https://acevedomiguel.github.io/kimiburn/assets/images/social-preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0e11">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; media-src 'self'; worker-src 'none'">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/site.css">
+<script src="assets/js/site.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="site-header">
+  <nav class="nav" aria-label="Main">
+    <a class="wordmark" href="#top"><span class="wordmark-mark" aria-hidden="true">╭─╮</span> kimiburn</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#quickstart">Quick start</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/acevedomiguel/kimiburn">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+
+  <section class="hero" id="top" aria-labelledby="hero-title">
+    <h1 id="hero-title">Will your Kimi Code quota last until the <span class="accent-warm">reset</span>?</h1>
+    <p class="lede">Kimiburn is a read-only terminal monitor for Kimi Code membership quotas. It shows
+    the rolling 5-hour window, the monthly membership, and a local runway estimate for each — on
+    one line that puts the depletion point next to the reset.</p>
+    <p class="hero-actions">
+      <a class="button button-primary" href="#install">Install Kimiburn</a>
+      <a class="button button-secondary" href="https://github.com/acevedomiguel/kimiburn">View on GitHub</a>
+    </p>
+    <p class="hero-try">Try it without a token: <code>kimiburn demo</code> renders the dashboard on synthetic data.</p>
+  </section>
+
+  <section class="preview" aria-labelledby="preview-title">
+    <h2 id="preview-title" class="visually-hidden">Terminal preview</h2>
+    <figure class="terminal-figure">
+      <div class="terminal-window">
+        <div class="terminal-bar" aria-hidden="true">
+          <span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span>
+          <span class="terminal-title">kimiburn demo</span>
+        </div>
+        <picture>
+          <source srcset="assets/images/terminal-demo.avif" type="image/avif">
+          <source srcset="assets/images/terminal-demo.webp" type="image/webp">
+          <img src="assets/images/terminal-demo.webp" width="1400" height="440"
+               alt="Kimiburn terminal dashboard under a centred title: four quota panels — 5-hour quota, monthly membership, monthly Code allocation, and a legacy 7-day quota — each with a remaining meter coloured from green to red, a now-to-reset timeline marking the estimated depletion, reset, runway and burn rows, and a usage sparkline.">
+        </picture>
+      </div>
+      <figcaption>Captured from <code>kimiburn demo</code> — synthetic example data, no real account figures.</figcaption>
+    </figure>
+  </section>
+
+  <section id="features" aria-labelledby="features-title">
+    <h2 id="features-title">Features</h2>
+    <ul class="feature-grid">
+      <li>
+        <h3>Every quota on one screen</h3>
+        <p>The rolling 5-hour quota, the shared monthly membership, the monthly Code allocation when reported, and a legacy 7-day quota when the API returns one.</p>
+      </li>
+      <li>
+        <h3>Runway against the reset</h3>
+        <p>A <code>now ●━━━✕┄┄│ reset</code> timeline per quota: ✕ marks the estimated depletion, and <code>reset ✓</code> means the quota outlasts the window.</p>
+      </li>
+      <li>
+        <h3>Meters that read at a glance</h3>
+        <p>Remaining quota is drawn from green through amber to red, animating to each new reading, with live countdowns to every reset.</p>
+      </li>
+      <li>
+        <h3>Usage trend</h3>
+        <p>A sparkline of the locally retained readings of the current reset period — the same samples the runway estimate is fitted to.</p>
+      </li>
+      <li>
+        <h3>Built on Charm v2</h3>
+        <p>Help and key bubbles drive the footer and a <kbd>?</kbd> help popup — <kbd>Esc</kbd> closes it. Mouse-wheel scrolling, a refresh spinner, and colours that follow your terminal's light or dark theme.</p>
+      </li>
+      <li>
+        <h3>In your terminal tab</h3>
+        <p>The tab title carries the 5-hour quota and runway. In Ghostty, WezTerm, and Windows Terminal the quota also shows as the terminal's own progress indicator.</p>
+      </li>
+      <li>
+        <h3>Offline cache</h3>
+        <p>The last good reading renders immediately on startup, labelled as cached with its age, and failed reads never erase it.</p>
+      </li>
+      <li>
+        <h3>Scriptable</h3>
+        <p><code>kimiburn --json</code> prints one versioned document with normalized quotas, runway values, warnings, and the raw provider object.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section id="install" aria-labelledby="install-title">
+    <h2 id="install-title">Installation</h2>
+
+    <h3>Homebrew (macOS and Linux)</h3>
+    <div class="command">
+      <pre tabindex="0"><code>brew tap acevedomiguel/kimiburn
+brew install --cask kimiburn
+kimiburn --version</code></pre>
+    </div>
+    <p>The cask installs a prebuilt binary. Because the tap is a third-party tap, Homebrew asks you
+    to trust it once with <code>brew trust acevedomiguel/kimiburn</code>.</p>
+
+    <h3>Go</h3>
+    <div class="command">
+      <pre tabindex="0"><code>go install github.com/acevedomiguel/kimiburn/cmd/kimiburn@latest</code></pre>
+    </div>
+
+    <h3>Prebuilt binaries</h3>
+    <p>Every release publishes Linux, macOS, and Windows archives plus a <code>checksums.txt</code>
+    on the <a href="https://github.com/acevedomiguel/kimiburn/releases/latest">GitHub Releases page</a>.
+    Verify a download with <code>sha256sum -c checksums.txt --ignore-missing</code>.</p>
+  </section>
+
+  <section id="quickstart" aria-labelledby="quickstart-title">
+    <h2 id="quickstart-title">Quick start</h2>
+    <p>Kimiburn needs a Kimi Code token, supplied explicitly — it never imports credentials from
+    another application. Run:</p>
+    <div class="command">
+      <pre tabindex="0"><code>kimiburn setup     # hidden prompt, validates the token, stores it
+kimiburn           # open the dashboard</code></pre>
+    </div>
+    <p>Running <code>kimiburn</code> without a token starts setup automatically and then opens the
+    dashboard. Setup validates the token with one live usage request before storing it in the OS
+    keyring, or in a permission-restricted fallback file when the keyring is unavailable. For a
+    non-interactive process, set <code>KIMIBURN_TOKEN</code> instead.</p>
+    <p>The dashboard refreshes every 30 seconds by default, which is also the minimum; set
+    <code>refresh_interval</code> to a longer duration, or to <code>0</code> for manual refresh
+    only. Print the configuration path with <code>kimiburn config path</code>.</p>
+  </section>
+
+  <section id="runway" aria-labelledby="runway-title">
+    <h2 id="runway-title">Understanding the runway</h2>
+    <p>Runway answers “at the current burn rate, when does this quota run out?” It is calculated
+    on your machine, not supplied by Kimi, and it is an <strong>estimate, not a guarantee</strong>.</p>
+    <p>On a first read, Kimiburn estimates the average burn from the reported ratio and the elapsed
+    part of the current window. After at least five local samples spanning two minutes, it fits
+    the observed trend instead. A reset or a falling ratio clears only that quota's history, and
+    forecasts never cross a reset:</p>
+    <table>
+      <thead>
+        <tr><th scope="col">Situation</th><th scope="col">Displayed</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Runs out before the reset</td><td>A duration such as <code>2h 20m</code>, and ✕ on the timeline</td></tr>
+        <tr><td>Lasts past the reset</td><td><code>Beyond this reset</code>, and <code>reset ✓</code></td></tr>
+        <tr><td>No usage observed</td><td><code>No consumption observed</code></td></tr>
+        <tr><td>Quota fully used</td><td><code>Depleted</code></td></tr>
+        <tr><td>Too few readings</td><td><code>Unavailable · insufficient samples</code></td></tr>
+      </tbody>
+    </table>
+    <p>The monthly Code allocation is part of the shared monthly membership, not an extra
+    allowance; the two are never added together.</p>
+  </section>
+
+  <section id="security" aria-labelledby="security-title">
+    <h2 id="security-title">Security and privacy</h2>
+    <ul class="feature-list">
+      <li>This website is static. It never sees, requests, or transmits your Kimi token or account data — the application is separate and runs entirely on your machine.</li>
+      <li>Kimiburn reads only <code>GET /usages</code> on the Kimi Code API base you select, and never falls back to another host or to Moonshot Open Platform.</li>
+      <li>Tokens are never written to the cache or to JSON output, and errors redact configured credentials before display.</li>
+      <li>Kimiburn only reads data: no inference traffic, no quota changes, no token creation, rotation, or revocation.</li>
+    </ul>
+    <p>To report a vulnerability, see
+    <a href="https://github.com/acevedomiguel/kimiburn/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+  </section>
+
+  <section id="faq" aria-labelledby="faq-title">
+    <h2 id="faq-title">FAQ</h2>
+
+    <h3>Is Kimiburn affiliated with Kimi or Moonshot AI?</h3>
+    <p>No. Kimiburn is an independent open-source project and is not an official Kimi client.</p>
+
+    <h3>Does this website see my token?</h3>
+    <p>No. The site is static pages served by GitHub Pages. It has no forms, no scripts that make
+    network requests, and no credential flow of any kind.</p>
+
+    <h3>Why does it say “insufficient samples”?</h3>
+    <p>The sample-based estimate needs five readings over at least two minutes of the current reset
+    period. Leave the dashboard open for a couple of refreshes and the runway appears.</p>
+
+    <h3>Can I see absolute request or token counts?</h3>
+    <p>Only when the API reports them. Ratio-only responses cannot reveal absolute amounts, and
+    Kimiburn labels missing values instead of inventing plausible numbers.</p>
+
+    <h3>Can I use it without Homebrew?</h3>
+    <p>Yes. Install with <code>go install</code> or download a prebuilt archive from the
+    <a href="https://github.com/acevedomiguel/kimiburn/releases/latest">releases page</a>.</p>
+  </section>
+
+  <section id="sibling" aria-labelledby="sibling-title">
+    <h2 id="sibling-title">Also on OpenRouter?</h2>
+    <p><a href="https://acevedomiguel.github.io/routeburn/">RouteBurn</a> is Kimiburn's sibling: the
+    same read-only terminal dashboard idea for OpenRouter credits — the remaining balance, the last
+    30 days of spend, and how long the balance lasts at the current burn rate.</p>
+  </section>
+
+  <section id="contribute" aria-labelledby="contribute-title">
+    <h2 id="contribute-title">Open source and contributing</h2>
+    <p>Kimiburn is open source under the
+    <a href="https://github.com/acevedomiguel/kimiburn/blob/main/LICENSE">MIT license</a>.
+    Contributions are welcome — start with
+    <a href="https://github.com/acevedomiguel/kimiburn/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>
+    and browse the <a href="https://github.com/acevedomiguel/kimiburn/issues">issue tracker</a>
+    before opening a pull request. Release notes live on the
+    <a href="https://github.com/acevedomiguel/kimiburn/releases">releases page</a>.</p>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p><strong>kimiburn</strong> ·
+    <a href="https://github.com/acevedomiguel/kimiburn">GitHub</a> ·
+    <a href="https://github.com/acevedomiguel/kimiburn/blob/main/LICENSE">MIT license</a>
+  </p>
+  <p>An independent open-source project. Not affiliated with Kimi or Moonshot AI.</p>
+</footer>
+
+</body>
+</html>
