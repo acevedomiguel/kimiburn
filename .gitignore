@@ -1,6 +1,9 @@
 # SDD planning scratch
 /.superpowers/
 
+# Local git worktrees
+/.worktrees/
+
 # Build and release tooling output
 /kimiburn
 /kimiburn.exe

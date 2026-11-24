@@ -1,12 +1,42 @@
 # Kimiburn
 
-Kimiburn is a read-only terminal monitor for Kimi Code quotas. It shows the
-shared monthly membership, the Monthly Code allocation when reported, the
-rolling 5-hour quota, and a legacy 7-day quota when the API reports one. It
-also derives local burn-rate and runway estimates from repeated observations.
+**A read-only terminal monitor for Kimi Code membership quotas and runway.**
+
+```
+                                     KIMIBURN · SYNTHETIC DATA · no provider calls
+  ╭─ Monthly membership ──────────── Live · 14:32:30 UTC ─╮ ╭─ 5-hour quota ─────────────────────────────────────────╮
+  │ Remaining ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇░░░░░░░░░░░░░░░ 58.2% │ │ Remaining ▇▇▇▇▇▇▇▇▇▇▇░░░░░░░░░░░░░░░░░░░░░░░░░░░ 28.0% │
+  │ Reset ····································· in 18d 6h │ │ Reset ······································ in 3h 12m │
+  │ Runway ···························· Beyond this reset │ │ Runway ········································ 2h 20m │
+  │ Burn ·································· 0.90%/day │ │ Burn ········································· 12.0%/h │
+  ╰───────────────────────────────────────────────────────╯ ╰────────────────────────────────────────────────────────╯
+  ╭─ 7-day quota · legacy ───────────────────────────────────────────────────────────────────────────────────────────╮
+  │ Remaining ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 60.0% │
+  │ Reset ································································································· in 2d 0h │
+  │ Runway ················································································· No consumption observed │
+  │ Burn ································································································· 0.00%/day │
+  │ Requests ················································································· 40/100 used · 60 left │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ [r] refresh · [↑↓/j/k] scroll · [pgup/pgdn] page · [?] help · [q] quit
+```
+
+Illustrative rendering with synthetic values, reproduced locally with
+`kimiburn demo`. The dashboard shows only your own account figures.
+
+Kimiburn shows the shared monthly membership, the Monthly Code allocation when
+reported, the rolling 5-hour quota, and a legacy 7-day quota when the API
+reports one. It also derives local burn-rate and runway estimates from
+repeated observations.
 
 Built with Go and Charm as a sibling of
 [Routeburn](https://github.com/acevedomiguel/routeburn).
+
+> Kimiburn only reads data. It sends no inference traffic, changes no quota,
+> never rotates or revokes tokens, and never falls back to Moonshot Open
+> Platform. Ratio-only responses cannot reveal absolute request, token, or
+> currency amounts. The monthly Code allocation is part of the shared
+> membership quota; the two are never added together.
 
 ## What it does
 
@@ -18,12 +48,7 @@ Built with Go and Charm as a sibling of
   estimates instead of inventing plausible numbers.
 - Includes a deterministic synthetic demo that needs no token or network.
 
-Kimiburn does not send inference traffic, change quota, rotate credentials, or
-use Moonshot Open Platform. Ratio-only responses cannot reveal absolute request,
-token, or currency amounts. The monthly Code allocation is part of the shared
-membership quota; the two are never added together.
-
-## Install
+## Installation
 
 ### Homebrew (macOS and Linux)
 
@@ -49,20 +74,32 @@ The tap is a third-party tap, so Homebrew asks you to trust it once:
 brew trust acevedomiguel/kimiburn
 ```
 
-### Archives
+### Go
 
-Download an archive for your platform from GitHub Releases once the first
-release is published. Archives contain the binary, this README, and the LICENSE;
-`checksums.txt` contains SHA-256 checksums. Linux and macOS use `.tar.gz`;
-Windows uses `.zip`. Initial targets are Linux/macOS/Windows amd64 and
-Linux/macOS arm64.
+```bash
+go install github.com/acevedomiguel/kimiburn/cmd/kimiburn@latest
+```
 
-For a source build, use Go 1.26.0 or newer:
+### Prebuilt binaries
 
-```sh
+Every release publishes Linux, macOS, and Windows archives plus a
+`checksums.txt` file on the GitHub Releases page. Archives contain the binary,
+this README, and the LICENSE; Linux and macOS use `.tar.gz`, Windows uses
+`.zip`. Targets are Linux/macOS/Windows amd64 and Linux/macOS arm64. Verify a
+download with:
+
+```bash
+sha256sum -c checksums.txt --ignore-missing
+```
+
+### From source
+
+Use Go 1.26.0 or newer:
+
+```bash
 git clone https://github.com/acevedomiguel/kimiburn.git
 cd kimiburn
-go build ./cmd/kimiburn
+make build
 ./kimiburn --version
 ```
 
@@ -215,5 +252,7 @@ go build ./cmd/kimiburn
 ```
 
 Tests are synthetic-only and require no token, network, keyring, or real user
-state. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and
+state. The rendering at the top of this file is an illustration with synthetic
+values, not a recorded account; `kimiburn demo` reproduces it without a token
+or network. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and
 [`SECURITY.md`](SECURITY.md). Licensed under MIT.
