@@ -1,3 +1,9 @@
+## [1.1.2](https://github.com/acevedomiguel/kimiburn/compare/v1.1.1...v1.1.2) (2026-11-24)
+
+### Bug Fixes
+
+* put 5-hour quota on the left and halve code allocation width ([#4](https://github.com/acevedomiguel/kimiburn/issues/4)) ([fb038d8](https://github.com/acevedomiguel/kimiburn/commit/fb038d83cb05c194dc748648bd0db959c7384a94))
+
 ## [1.1.1](https://github.com/acevedomiguel/kimiburn/compare/v1.1.0...v1.1.1) (2026-11-24)
 
 ### Bug Fixes
