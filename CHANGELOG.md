@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/acevedomiguel/kimiburn/compare/v1.1.0...v1.1.1) (2026-11-24)
+
+### Bug Fixes
+
+* authenticate homebrew tap push with tap token ([c521bbf](https://github.com/acevedomiguel/kimiburn/commit/c521bbf0fac8a663a72a785aab0389d429f6fe52))
+
 ## [1.1.0](https://github.com/acevedomiguel/kimiburn/compare/v1.0.0...v1.1.0) (2026-11-24)
 
 ### Features
