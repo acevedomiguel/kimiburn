@@ -82,6 +82,7 @@ type Model struct {
 	interval      time.Duration
 	now           func() time.Time
 	cancel        context.CancelFunc
+	cancelAttempt context.CancelFunc
 	configured    func() (bool, error)
 	refresh       RefreshFunc
 	demo          bool
@@ -151,8 +152,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.demo {
 			return m, func() tea.Msg { return refreshFinishedMsg(RefreshResult{Snapshot: ui.SyntheticSnapshot()}) }
 		}
-		if m.snapshot.GeneratedAt.IsZero() == false || m.state != ViewLoading {
-			return m, m.scheduleTick(m.now())
+		if m.state == ViewSetup || m.state == ViewFatal {
+			return m, nil
 		}
 		cmd, _ := m.StartAttempt(false)
 		return m, tea.Batch(cmd, m.scheduleTick(m.now()))
@@ -199,8 +200,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	switch key {
 	case "q", "ctrl+c":
-		if m.inFlight && m.cancel != nil {
+		if m.cancel != nil {
 			m.cancel()
+		}
+		if m.cancelAttempt != nil {
+			m.cancelAttempt()
 		}
 		return m, tea.Quit
 	case "r":
@@ -242,7 +246,7 @@ func (m Model) View() tea.View {
 	var content string
 	switch m.state {
 	case ViewReady:
-		content = ui.RenderDashboard(m.snapshot, ui.DashboardOptions{Width: m.width, Height: m.height, Now: m.now(), Cached: m.cached, Styles: m.styles, Warning: m.warning, Scroll: m.scroll})
+		content = ui.RenderDashboard(m.snapshot, ui.DashboardOptions{Width: m.width, Height: m.height, Now: m.now(), Cached: m.cached, Demo: m.demo, Styles: m.styles, Warning: m.warning, Scroll: m.scroll})
 	case ViewHelp:
 		content = m.renderHelp()
 	case ViewSetup:

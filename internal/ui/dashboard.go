@@ -14,6 +14,7 @@ type DashboardOptions struct {
 	Width, Height int
 	Now           time.Time
 	Cached        bool
+	Demo          bool
 	Styles        Styles
 	Warning       string
 	Scroll        int
@@ -91,7 +92,11 @@ func RenderDashboard(snapshot domain.Snapshot, opts DashboardOptions) string {
 	end := minInt(len(body), scroll+bodyHeight)
 
 	lines := make([]string, 0, opts.Height)
-	lines = append(lines, padRight(truncate(opts.Styles.Title.Render("KIMIBURN · Kimi Code quota and local runway"), opts.Width), opts.Width))
+	title := "KIMIBURN · Kimi Code quota and local runway"
+	if opts.Demo {
+		title = "KIMIBURN · SYNTHETIC DATA · no provider calls"
+	}
+	lines = append(lines, padRight(truncate(opts.Styles.Title.Render(title), opts.Width), opts.Width))
 	if warning != "" {
 		lines = append(lines, padRight(truncate(opts.Styles.Warning.Render("Warning · "+warning+" · press ? for details"), opts.Width), opts.Width))
 	}

@@ -21,7 +21,7 @@ func TestScheduleDelay(t *testing.T) {
 		{"zeroAutomatic", 0, Model{}, 0, true},
 		{"normal", 30 * time.Second, Model{lastAttempt: now.Add(-15 * time.Second)}, 30 * time.Second, true},
 		{"backoff", 30 * time.Second, Model{lastAttempt: now.Add(-15 * time.Second), nextAllowed: now.Add(time.Minute)}, time.Minute, true},
-		{"cacheOnly", 30 * time.Second, Model{state: ViewReady, cached: true}, 30 * time.Second, false},
+		{"cacheOnly", 30 * time.Second, Model{state: ViewReady, cached: true}, 30 * time.Second, true},
 		{"setup", 30 * time.Second, Model{state: ViewSetup}, 30 * time.Second, false},
 		{"suspended", 30 * time.Second, Model{state: ViewReady, suspended: true}, 30 * time.Second, false},
 		{"inflight", 30 * time.Second, Model{state: ViewReady, inFlight: true}, 30 * time.Second, false},
@@ -68,6 +68,13 @@ func TestStartAttemptThrottlesAndCommitsGeneration(t *testing.T) {
 	cmd, started = m.StartAttempt(false)
 	if started || cmd != nil {
 		t.Fatal("suspended automatic attempt started")
+	}
+
+	m.suspended, m.cached, m.state = false, true, ViewReady
+	m.lastAttempt = now.Add(-31 * time.Second)
+	m.nextAllowed = time.Time{}
+	if cmd, started = m.StartAttempt(false); !started || cmd == nil {
+		t.Fatal("cached snapshot must still refresh from the live provider")
 	}
 }
 

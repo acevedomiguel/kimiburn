@@ -3,10 +3,14 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/acevedomiguel/kimiburn/internal/app"
+	"github.com/acevedomiguel/kimiburn/internal/domain"
 )
 
 // errorReader fails on any read, so a CLI path that prompts or consumes stdin
@@ -91,15 +95,45 @@ func TestRunVersionPrintsVersionOnStdout(t *testing.T) {
 
 func TestRunWithoutArgsInvokesDashboardEntryPoint(t *testing.T) {
 	isolatedEnv(t)
-	code, stdout, stderr := runCLI()
-	if code != exitFailure {
-		t.Errorf("exit code = %d, want %d", code, exitFailure)
+	var out, errOut bytes.Buffer
+	d := defaultDeps()
+	d.keyring = nil
+	d.runDashboard = func(model app.Model, _ io.Reader, _ io.Writer) error {
+		updated, cmd := model.Update(model.Init()())
+		if cmd != nil {
+			updated, _ = updated.Update(cmd())
+		}
+		if got := updated.(app.Model).View().Content; !strings.Contains(got, "Token setup required") {
+			t.Fatalf("root view: %s", got)
+		}
+		return nil
 	}
-	if stdout != "" {
-		t.Errorf("stdout = %q, want empty", stdout)
+	if code := runWithDeps(nil, errorReader{}, &out, &errOut, d); code != exitOK {
+		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
 	}
-	if !strings.Contains(stderr, "dashboard is not available") {
-		t.Errorf("stderr = %q", stderr)
+}
+
+func TestDemoRunsSyntheticDashboardWithoutProvider(t *testing.T) {
+	isolatedEnv(t)
+	var out, errOut bytes.Buffer
+	d := defaultDeps()
+	d.newUsage = func(string, string) (domain.UsageSource, error) {
+		t.Fatal("demo constructed provider")
+		return nil, nil
+	}
+	d.runDashboard = func(model app.Model, _ io.Reader, _ io.Writer) error {
+		updated, cmd := model.Update(model.Init()())
+		if cmd == nil {
+			t.Fatal("demo did not produce synthetic snapshot")
+		}
+		updated, _ = updated.Update(cmd())
+		if got := updated.(app.Model).View().Content; !strings.Contains(got, "Monthly membership") || !strings.Contains(got, "SYNTHETIC") {
+			t.Fatalf("demo view: %s", got)
+		}
+		return nil
+	}
+	if code := runWithDeps([]string{"demo"}, errorReader{}, &out, &errOut, d); code != exitOK {
+		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
 	}
 }
 

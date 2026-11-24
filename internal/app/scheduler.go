@@ -16,16 +16,13 @@ func (m Model) ScheduleDelay(now time.Time, interval time.Duration) (time.Durati
 		delay = maxDuration(delay, m.nextAllowed.Sub(now))
 	}
 	allowed := !m.inFlight && !m.suspended && m.state != ViewSetup && m.state != ViewFatal
-	if m.state == ViewReady && m.cached {
-		allowed = false
-	}
 	return delay, allowed
 }
 
 // StartAttempt commits throttle and generation state before returning the
 // asynchronous command. A zero automatic interval never disables manual waits.
 func (m *Model) StartAttempt(manual bool) (tea.Cmd, bool) {
-	if m.inFlight || m.state == ViewSetup || m.state == ViewFatal || (!manual && (m.suspended || (m.state == ViewReady && m.cached))) {
+	if m.inFlight || m.state == ViewSetup || m.state == ViewFatal || (!manual && m.suspended) {
 		return nil, false
 	}
 	now := m.now()
@@ -58,11 +55,13 @@ func (m *Model) StartAttempt(manual bool) (tea.Cmd, bool) {
 	}
 	request := RefreshRequest{Generation: generation, Manual: manual}
 	refresh := m.refresh
+	ctx, cancelAttempt := context.WithCancel(context.Background())
+	m.cancelAttempt = cancelAttempt
 	return func() tea.Msg {
+		defer cancelAttempt()
 		if refresh == nil {
 			return refreshFinishedMsg(RefreshResult{Generation: generation, Manual: manual, Err: errors.New("refresh is not configured")})
 		}
-		ctx := context.Background()
 		return refreshFinishedMsg(refresh(ctx, request))
 	}, true
 }
@@ -71,8 +70,9 @@ func (m Model) applyRefresh(result RefreshResult) Model {
 	if result.Generation != m.generation || (result.Manual && result.Manual != (m.manual > 0)) {
 		return m
 	}
-	if m.cancel != nil {
-		m.cancel()
+	if m.cancelAttempt != nil {
+		m.cancelAttempt()
+		m.cancelAttempt = nil
 	}
 	m.inFlight = false
 	if result.NextAllowed.After(m.nextAllowed) {

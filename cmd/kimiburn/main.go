@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/acevedomiguel/kimiburn/internal/app"
 	"github.com/acevedomiguel/kimiburn/internal/cache"
 	"github.com/acevedomiguel/kimiburn/internal/config"
 	"github.com/acevedomiguel/kimiburn/internal/credentials"
@@ -81,6 +82,9 @@ type deps struct {
 	stateStore cache.StateStore
 	// now supplies cached-age timestamps in tests.
 	now func() time.Time
+	// runDashboard runs the alternate-screen program; tests drive the model
+	// directly without a terminal.
+	runDashboard func(app.Model, io.Reader, io.Writer) error
 }
 
 // runWithDeps is the testable entry point.
@@ -103,13 +107,7 @@ func runWithDeps(args []string, stdin io.Reader, stdout, stderr io.Writer, d dep
 		printUsage(stdout)
 		return exitOK
 	case "":
-		if !opts.jsonOutput {
-			fmt.Fprintln(stderr, "kimiburn: dashboard is not available in this build")
-			return exitFailure
-		}
 	case "demo":
-		fmt.Fprintln(stderr, "kimiburn: demo is not available in this build")
-		return exitFailure
 	}
 
 	paths, err := config.DefaultPaths()
@@ -120,6 +118,9 @@ func runWithDeps(args []string, stdin io.Reader, stdout, stderr io.Writer, d dep
 
 	if opts.command == "" && opts.jsonOutput {
 		return doJSON(paths, opts, stdout, stderr, d)
+	}
+	if (opts.command == "" && !opts.jsonOutput) || opts.command == "demo" {
+		return doDashboard(paths, opts, stdin, stdout, stderr, d)
 	}
 
 	switch opts.command {

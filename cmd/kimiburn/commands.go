@@ -25,7 +25,8 @@ func defaultDeps() deps {
 		newUsage: func(baseURL, token string) (domain.UsageSource, error) {
 			return kimi.NewClient(kimi.WithBaseURL(baseURL), kimi.WithToken(token), kimi.WithVersion(version))
 		},
-		now: time.Now,
+		now:          time.Now,
+		runDashboard: runTerminal,
 	}
 }
 

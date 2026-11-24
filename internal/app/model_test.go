@@ -78,7 +78,7 @@ func TestCancellationAndGenerationSupersession(t *testing.T) {
 		t.Fatalf("stale result replaced state: %+v", stale)
 	}
 	cancelled = false
-	m.cancel = func() { cancelled = true }
+	m.cancelAttempt = func() { cancelled = true }
 	m.inFlight = true
 	m = m.applyRefresh(RefreshResult{Generation: 4, Manual: true})
 	if !cancelled || m.inFlight {
