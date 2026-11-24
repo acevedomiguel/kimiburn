@@ -116,7 +116,7 @@ func FormatAge(age time.Duration) string {
 // FreshnessCaption labels live and cached data distinctly.
 func FreshnessCaption(snapshot domain.Snapshot, cached bool, now time.Time) string {
 	if !cached {
-		return "Live · " + snapshot.GeneratedAt.UTC().Format("15:04:05 UTC")
+		return "Live · " + snapshot.GeneratedAt.In(now.Location()).Format("15:04:05 MST")
 	}
 	return "Cached data · updated " + FormatAge(now.Sub(snapshot.GeneratedAt))
 }

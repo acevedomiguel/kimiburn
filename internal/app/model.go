@@ -181,9 +181,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
+	if key == "esc" {
+		if m.cancel != nil {
+			m.cancel()
+		}
+		if m.cancelAttempt != nil {
+			m.cancelAttempt()
+		}
+		return m, tea.Quit
+	}
 	if m.state == ViewHelp {
 		switch key {
-		case "esc", "q", "?":
+		case "q", "?":
 			m.state, m.scroll = m.savedState, m.savedScroll
 		case "up", "k":
 			m.scroll = maxInt(0, m.scroll-1)
@@ -320,7 +329,7 @@ func (m Model) renderHelp() string {
 	for len(out) < m.height-1 {
 		out = append(out, strings.Repeat(" ", m.width))
 	}
-	out = append(out, fitLine("[↑↓/j/k] scroll · [esc/?/q] close", m.width))
+	out = append(out, fitLine("[↑↓/j/k] scroll · [?/q] close · [esc] quit", m.width))
 	return strings.Join(out[:m.height], "\n")
 }
 

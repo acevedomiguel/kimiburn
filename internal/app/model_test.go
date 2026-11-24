@@ -59,6 +59,26 @@ func TestResizeAndWarmCacheControls(t *testing.T) {
 	}
 }
 
+func TestEscapeQuitsFromDashboardAndHelp(t *testing.T) {
+	for _, help := range []bool{false, true} {
+		cancelled := false
+		m := NewModel(Options{Cancel: func() { cancelled = true }, Snapshot: ui.SyntheticSnapshot()})
+		if help {
+			m = m.openHelp()
+		}
+		_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+		if cmd == nil {
+			t.Fatalf("escape returned no quit command (help=%t)", help)
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Fatalf("escape did not quit (help=%t)", help)
+		}
+		if !cancelled {
+			t.Fatalf("escape did not cancel application work (help=%t)", help)
+		}
+	}
+}
+
 func TestCancellationAndGenerationSupersession(t *testing.T) {
 	cancelled := false
 	m := NewModel(Options{Now: func() time.Time { return mustNow() }, Cancel: func() { cancelled = true }})
@@ -97,7 +117,7 @@ func TestHelpAndScrollRestore(t *testing.T) {
 	}
 	m.maxScroll()
 	m.scroll = 3
-	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	m = updated.(Model)
 	if m.state != ViewReady || m.scroll != 9 {
 		t.Fatalf("restore state=%v scroll=%d", m.state, m.scroll)

@@ -27,6 +27,16 @@ func TestFormattingDistinguishesZeroMissingAndUnavailable(t *testing.T) {
 	}
 }
 
+func TestLiveCaptionUsesReadingLocalTimezone(t *testing.T) {
+	generated := time.Date(2026, 11, 24, 14, 32, 30, 0, time.UTC)
+	location := time.FixedZone("EST", -5*60*60)
+	now := generated.In(location)
+	got := FreshnessCaption(domain.Snapshot{GeneratedAt: generated}, false, now)
+	if got != "Live · 09:32:30 EST" {
+		t.Fatalf("live caption=%q, want local timezone", got)
+	}
+}
+
 func TestResetAndRunwayFormatting(t *testing.T) {
 	now := time.Date(2026, 11, 24, 14, 32, 30, 0, time.UTC)
 	reset := now.Add(3*time.Hour + 12*time.Minute)
