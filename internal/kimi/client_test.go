@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -83,7 +84,12 @@ func TestNewClientRejectsDisallowedBaseURLs(t *testing.T) {
 	}{
 		{"primary", config.DefaultBaseURL, false},
 		{"overseas", config.OverseasBaseURL, false},
-		{"primary trailing slash", config.DefaultBaseURL + "/", false},
+		{"primary trailing slash", config.DefaultBaseURL + "/", true},
+		{"overseas trailing slash", config.OverseasBaseURL + "/", true},
+		{"primary double trailing slash", config.DefaultBaseURL + "//", true},
+		{"primary leading space", " " + config.DefaultBaseURL, true},
+		{"primary trailing space", config.DefaultBaseURL + " ", true},
+		{"primary trailing tab", config.DefaultBaseURL + "\t", true},
 		{"plain http production", "http://api.kimi.com/coding/v1", true},
 		{"open platform", "https://api.moonshot.ai/v1", true},
 		{"openrouter", "https://openrouter.ai/api/v1", true},
@@ -93,6 +99,7 @@ func TestNewClientRejectsDisallowedBaseURLs(t *testing.T) {
 		{"loopback http", "http://127.0.0.1:1", false},
 		{"loopback localhost", "http://localhost:1", false},
 		{"loopback ipv6", "http://[::1]:1", false},
+		{"loopback trailing slash", "http://127.0.0.1:1/", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -824,5 +831,42 @@ func TestNewClientAllowsOnlyLoopbackOverrides(t *testing.T) {
 		if _, err := NewClient(WithBaseURL(base), WithToken(syntheticToken)); !errors.Is(err, ErrUnsupportedBaseURL) {
 			t.Errorf("NewClient(%q) error = %v, want ErrUnsupportedBaseURL", base, err)
 		}
+	}
+}
+
+// A Retry-After seconds value that would overflow time.Duration must saturate
+// instead of wrapping negative, which would retry immediately.
+func TestReadUsageSaturatesOverflowingRetryAfter(t *testing.T) {
+	var calls requestCounter
+	c, _, sleeps := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.add(); calls.count() == 1 {
+			w.Header().Set("Retry-After", "9223372036854775807")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		io.WriteString(w, `{"usages":{}}`)
+	}))
+	if _, err := c.ReadUsage(context.Background()); err != nil {
+		t.Fatalf("ReadUsage: %v", err)
+	}
+	got := sleeps.recorded()
+	if len(got) != 1 {
+		t.Fatalf("sleeps = %v, want exactly one delay", got)
+	}
+	if got[0] != time.Duration(math.MaxInt64) {
+		t.Fatalf("sleeps = %v, want the saturated %v", got, time.Duration(math.MaxInt64))
+	}
+	want := fixedNow.Add(time.Duration(math.MaxInt64))
+	if at := c.NextRefreshAllowedAt(); !at.Equal(want) {
+		t.Errorf("NextRefreshAllowedAt = %v, want the saturated %v", at, want)
+	}
+}
+
+func TestRetryAfterDelaySaturatesOverflow(t *testing.T) {
+	if got, ok := retryAfterDelay("9223372036854775807", fixedNow); !ok || got != time.Duration(math.MaxInt64) {
+		t.Fatalf("retryAfterDelay = %v, %v; want the saturated %v, true", got, ok, time.Duration(math.MaxInt64))
+	}
+	if got, ok := retryAfterDelay("9223372036", fixedNow); !ok || got != 9223372036*time.Second {
+		t.Fatalf("retryAfterDelay = %v, %v; want 9223372036s, true", got, ok)
 	}
 }

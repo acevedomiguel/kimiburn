@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -133,14 +134,16 @@ func NewClient(opts ...Option) (*Client, error) {
 	return c, nil
 }
 
-// normalizeBaseURL trims one trailing slash and validates the host. The error
-// never echoes the supplied value, which may contain a secret-like query.
+// normalizeBaseURL validates the selected base. Production bases are matched
+// against the original input exactly: a trailing slash, doubled slash, or
+// surrounding whitespace is a different string and is refused. Only an
+// explicitly injected loopback test base is canonicalized. The error never
+// echoes the supplied value, which may contain a secret-like query.
 func normalizeBaseURL(base string) (string, error) {
-	trimmed := strings.TrimRight(strings.TrimSpace(base), "/")
-	if trimmed == config.DefaultBaseURL || trimmed == config.OverseasBaseURL {
-		return trimmed, nil
+	if base == config.DefaultBaseURL || base == config.OverseasBaseURL {
+		return base, nil
 	}
-	u, err := url.Parse(trimmed)
+	u, err := url.Parse(base)
 	if err != nil {
 		return "", ErrUnsupportedBaseURL
 	}
@@ -153,7 +156,7 @@ func normalizeBaseURL(base string) (string, error) {
 	if !isLoopback(u.Hostname()) {
 		return "", ErrUnsupportedBaseURL
 	}
-	return trimmed, nil
+	return strings.TrimRight(base, "/"), nil
 }
 
 // isLoopback reports whether host is localhost or a loopback IP literal. Only
@@ -383,15 +386,20 @@ func parseRateLimitReset(value string, now time.Time) (time.Time, bool) {
 }
 
 // retryAfterDelay accepts integer seconds or an HTTP date. A date in the past
-// means "retry now" and yields a zero delay.
+// means "retry now" and yields a zero delay. Seconds are parsed as int64 and
+// saturate at the largest representable duration so an absurd value can never
+// wrap negative and retry immediately.
 func retryAfterDelay(value string, now time.Time) (time.Duration, bool) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return 0, false
 	}
-	if seconds, err := strconv.Atoi(trimmed); err == nil {
+	if seconds, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
 		if seconds < 0 {
 			return 0, false
+		}
+		if seconds > math.MaxInt64/int64(time.Second) {
+			return time.Duration(math.MaxInt64), true
 		}
 		return time.Duration(seconds) * time.Second, true
 	}
