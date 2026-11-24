@@ -2,27 +2,13 @@
 
 **A read-only terminal monitor for Kimi Code membership quotas and runway.**
 
-```
-                                       KIMIBURN · SYNTHETIC DATA · no provider calls
-  ╭─ 5-hour quota ──────────────────────────────────────────╮ ╭─ Monthly membership ─────────────── Live · 14:32:30 UTC ─╮
-  │ Remaining ▇▇▇▇▇▇▇▇▇▇▇░░░░░░░░░░░░░░░░░░░░░░░░░░░░ 28.0% │ │ Remaining ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇░░░░░░░░░░░░░░░░░ 58.2% │
-  │ Reset ······································· in 3h 12m │ │ Reset ········································ in 18d 6h │
-  │ Runway ········································· 2h 20m │ │ Runway ······························· Beyond this reset │
-  │ Burn ·········································· 12.0%/h │ │ Burn ········································· 0.90%/day │
-  ╰─────────────────────────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────╯
-  ╭─ Monthly Code allocation ───────────────────────────────╮ ╭─ 7-day quota · legacy ───────────────────────────────────╮
-  │ Remaining ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇░░░░░░░░ 80.0% │ │ Remaining ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇░░░░░░░░░░░░░░░░ 60.0% │
-  │ Reset ······································· in 18d 6h │ │ Reset ········································· in 2d 0h │
-  │ Runway ············· Unavailable · insufficient samples │ │ Runway ························· No consumption observed │
-  │ Burn ····································· Not reported │ │ Burn ········································· 0.00%/day │
-  │ Included in membership                                  │ │ Requests ························· 40/100 used · 60 left │
-  ╰─────────────────────────────────────────────────────────╯ ╰──────────────────────────────────────────────────────────╯
+Website: <https://acevedomiguel.github.io/kimiburn/>
 
- [r] refresh · [↑↓/j/k] scroll · [pgup/pgdn] page · [?] help · [q] quit
-```
+<p align="center">
+  <img src="assets-src/terminal-demo.png" width="1400" alt="Kimiburn terminal dashboard: a centred title over four quota panels — 5-hour quota, monthly membership, monthly Code allocation and a legacy 7-day quota — each with a coloured remaining meter, a now-to-reset timeline, reset, runway, burn and a usage sparkline.">
+</p>
 
-Illustrative rendering with synthetic values, reproduced locally with
-`kimiburn demo`. The dashboard shows only your own account figures.
+Captured from `kimiburn demo` with synthetic values; the dashboard shows only your own account figures. Regenerate it with `vhs assets-src/terminal-demo.tape` after `make build`.
 
 Kimiburn shows the shared monthly membership, the Monthly Code allocation when
 reported, the rolling 5-hour quota, and a legacy 7-day quota when the API
@@ -47,6 +33,10 @@ Built with Go and Charm as a sibling of
 - Labels cached data, parser conflicts, missing values, and unavailable
   estimates instead of inventing plausible numbers.
 - Includes a deterministic synthetic demo that needs no token or network.
+- Built on [Charm](https://charm.land) v2: `help` and `key` bubbles drive the
+  footer and the Help overlay, a `spinner` marks refreshes, `progress` draws the
+  meters, `viewport` scrolls the body and Help, and the lipgloss compositor
+  lays Help over the dashboard.
 
 ## Installation
 
@@ -144,8 +134,10 @@ kimiburn --help
 kimiburn --version
 ```
 
-Dashboard keys: `r` refreshes, arrow keys or `j`/`k` scroll, Page Up/Page Down
-scroll a page, Home/End jump, `?` opens help, and `q` quits. A manual refresh is
+Dashboard keys: `r` refreshes, arrow keys, `j`/`k`, or the mouse wheel scroll,
+Page Up/Page Down scroll a page, Home/End jump, `?` opens help, and `q` or Esc
+quits. In Help, Esc, `?`, or `q` close the overlay and return to the dashboard;
+only Ctrl+C quits from there. A manual refresh is
 throttled to one attempt per 30 seconds. A 401/403 suspends automatic requests
 until a manual refresh succeeds. Refresh intervals below 30 seconds are
 rejected unless the value is zero. Demo mode uses the same 30-second scheduler
@@ -156,10 +148,22 @@ but refreshes only synthetic data and never contacts the provider.
 The monthly membership and 5-hour panels have priority. Monthly Code allocation
 (`limit_month_code`) appears only when reported; it is included in the monthly
 membership, not an additional allowance. Legacy 7-day data also appears only
-when reported. Each quota row places a Remaining label, proportional bar, and
-remaining percentage in separate columns. The dashboard keeps raw provider
-JSON out of the way; use `--json` when you need the complete structured
-response.
+when reported. Each panel shows:
+
+- **Remaining**: a meter coloured from green through amber to red as the quota
+  drains, animating to each new reading, beside the remaining percentage.
+- **Timeline**: `now ●━━━━✕┄┄│ reset`, the estimated depletion (✕) against the
+  reset on one axis; `reset ✓` means the quota lasts past the reset.
+- **Reset**, **Runway**, and **Burn**, with countdowns updated every second.
+- **Usage**: a sparkline of the locally retained readings of the current reset
+  period, with how much was used over that span.
+
+The footer counts down to the next automatic read, or shows a spinner while a
+read is in flight. The terminal tab title carries the 5-hour quota and runway;
+in Ghostty, WezTerm, and Windows Terminal the 5-hour quota also appears as the
+terminal's own progress indicator. Colours follow the terminal's light or dark
+background unless `theme` pins one. The dashboard keeps raw provider JSON out
+of the way; use `--json` when you need the complete structured response.
 
 Runway and burn are calculated locally, not supplied by Kimi. On a first read,
 Kimiburn estimates average burn from the reported ratio and elapsed portion of
@@ -230,8 +234,9 @@ ACL rather than POSIX permission bits.
 
 To uninstall, remove the downloaded binary (or run `brew uninstall --cask
 kimiburn` for a Homebrew install), run `kimiburn logout`, and delete
-the config and cache directories shown above. No website, OAuth
-flow, hosted service, or Open Platform integration is currently provided.
+the config and cache directories shown above. No OAuth flow, hosted
+service, or Open Platform integration is provided; the project website is
+static and never sees a token.
 
 ## API stability and limitations
 

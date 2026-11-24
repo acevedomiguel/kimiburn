@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"math"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -114,31 +113,19 @@ func leaderValue(label, value string, width int, st Styles, valueStyle lipgloss.
 	return st.Label.Render(label) + " " + st.Muted.Render(strings.Repeat(boxDot, dots)) + " " + valueStyle.Render(value)
 }
 
-// remainingMeter renders a labelled row whose proportional bar and value
-// both describe the remaining quota.
-func remainingMeter(used float64, width int, st Styles) string {
-	if used < 0 {
-		used = 0
-	}
-	if used > 1 {
-		used = 1
-	}
-	remaining := 1 - used
+// remainingMeter renders a labelled row whose proportional bar and value both
+// describe the remaining quota. shown is the fraction the bar currently draws
+// while it animates towards remaining; the percentage always states the
+// reading itself.
+func remainingMeter(remaining, shown float64, width int, st Styles) string {
+	remaining = clamp01(remaining)
 	value := FormatPercent(&remaining)
 	const label = "Remaining"
 	barWidth := width - lipgloss.Width(label) - lipgloss.Width(value) - 2
 	if barWidth < 1 {
 		return leader(label, value, width, st)
 	}
-	fill := int(math.Round(remaining * float64(barWidth)))
-	if fill < 0 {
-		fill = 0
-	}
-	if fill > barWidth {
-		fill = barWidth
-	}
-	bar := st.Bar.Render(strings.Repeat("▇", fill)) + st.Muted.Render(strings.Repeat("░", barWidth-fill))
-	return st.Label.Render(label) + " " + bar + " " + st.Value.Render(value)
+	return st.Label.Render(label) + " " + meterBar(shown, remaining, barWidth, st) + " " + st.gaugeStyle(remaining).Bold(st.Enabled).Render(value)
 }
 
 // joinColumns places rendered blocks side by side, one space apart, padding

@@ -67,3 +67,48 @@ func SyntheticUnavailableSnapshot() domain.Snapshot {
 }
 
 func floatPointer(value float64) *float64 { return &value }
+
+// SyntheticTime is the instant the synthetic snapshots were "read". The demo
+// clock starts here so reset countdowns tick from the README values.
+func SyntheticTime() time.Time { return syntheticTime }
+
+// SyntheticHistory is an invented sample history consistent with the demo's
+// runway figures: the 5-hour quota climbs about 5.9% over 29.5 minutes in
+// uneven bursts, the monthly membership barely moves, and the legacy seven-day
+// quota is flat.
+func SyntheticHistory() map[domain.QuotaKey][]domain.Sample {
+	snapshot := SyntheticLegacySnapshot()
+	history := make(map[domain.QuotaKey][]domain.Sample)
+
+	// Burst weights repeat every 12 samples; the cumulative curve is scaled so
+	// the last sample lands exactly on the snapshot's used ratio.
+	weights := []float64{0, 1, 3, 2, 0, 0, 1, 4, 5, 2, 1, 0}
+	series := func(key domain.QuotaKey, count int, window time.Duration, rise float64) {
+		quota := snapshot.Quotas[key]
+		end := *quota.UsedRatio
+		cumulative := make([]float64, count)
+		total := 0.0
+		for i := 1; i < count; i++ {
+			total += weights[i%len(weights)]
+			cumulative[i] = total
+		}
+		step := window / time.Duration(count-1)
+		samples := make([]domain.Sample, count)
+		for i := range samples {
+			progress := 0.0
+			if total > 0 {
+				progress = cumulative[i] / total
+			}
+			samples[i] = domain.Sample{
+				ObservedAt: syntheticTime.Add(-window + time.Duration(i)*step),
+				UsedRatio:  end - rise + rise*progress,
+				ResetAt:    quota.ResetAt.UTC(),
+			}
+		}
+		history[key] = samples
+	}
+	series(domain.QuotaLimit5h, 60, 1770*time.Second, 0.059)
+	series(domain.QuotaLimitMonthTotal, 121, time.Hour, 0.0004)
+	series(domain.QuotaLimit7d, 30, 900*time.Second, 0)
+	return history
+}

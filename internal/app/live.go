@@ -58,7 +58,7 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 	_, cancel := context.WithCancel(context.Background())
 	var mu sync.Mutex
 	opts := Options{
-		Snapshot: snapshot, Warning: warning,
+		Snapshot: snapshot, Warning: warning, History: cloneHistory(state.Samples),
 		Interval: live.Interval, IntervalSet: true, NoColor: live.NoColor,
 		Now: live.Now, Cancel: cancel,
 	}
@@ -123,6 +123,7 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 		}
 		runway.RecordReading(state.Samples, reading)
 		result.Snapshot.Runways = runway.CalculateRunways(state.Samples, reading)
+		result.History = cloneHistory(state.Samples)
 		state.CacheVersion = domain.CacheSchemaVersion
 		state.Snapshot = &result.Snapshot
 		if live.NoCache {
@@ -134,4 +135,14 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 		return result
 	}
 	return opts, cancel, nil
+}
+
+// cloneHistory copies the sample history so the interactive model never shares
+// a slice with the refresh goroutine that keeps appending to it.
+func cloneHistory(history map[domain.QuotaKey][]domain.Sample) map[domain.QuotaKey][]domain.Sample {
+	out := make(map[domain.QuotaKey][]domain.Sample, len(history))
+	for key, samples := range history {
+		out[key] = append([]domain.Sample(nil), samples...)
+	}
+	return out
 }

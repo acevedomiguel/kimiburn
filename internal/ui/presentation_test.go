@@ -28,7 +28,7 @@ func TestDashboardCentersTitleAndOmitsAbsoluteQuotaTimes(t *testing.T) {
 
 func TestRemainingMeterPlacesLabelBarAndPercentageInColumns(t *testing.T) {
 	const width = 40
-	got := remainingMeter(0.418, width, NewStyles(false))
+	got := remainingMeter(0.582, 0.582, width, NewStyles(false))
 	if lipgloss.Width(got) != width {
 		t.Fatalf("meter width=%d, want %d: %q", lipgloss.Width(got), width, got)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -16,7 +17,7 @@ import (
 func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stderr io.Writer, d deps) int {
 	noColor := opts.noColor
 	if opts.command == "demo" {
-		model := app.NewModel(app.Options{Demo: true, NoColor: noColor, Now: d.now})
+		model := app.NewModel(app.Options{Demo: true, NoColor: noColor, Now: d.now, TerminalProgress: terminalProgressSupported(os.Getenv)})
 		if d.runDashboard == nil {
 			fmt.Fprintln(stderr, "kimiburn: interactive runner is unavailable")
 			return exitFailure
@@ -71,6 +72,8 @@ func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stde
 	}
 	defer cancel()
 	modelOptions.Demo = false
+	modelOptions.Theme = cfg.Theme
+	modelOptions.TerminalProgress = terminalProgressSupported(os.Getenv)
 	if d.runDashboard == nil {
 		fmt.Fprintln(stderr, "kimiburn: interactive runner is unavailable")
 		return exitFailure
