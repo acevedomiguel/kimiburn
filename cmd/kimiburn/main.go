@@ -53,8 +53,13 @@ func (e *usageError) Error() string { return e.msg }
 // network, or the real user configuration.
 type deps struct {
 	// validate checks a token with one live read. nil means "unavailable in
-	// this build", which must never be treated as success.
+	// this build", which must never be treated as success. Production leaves it
+	// nil and sets validateFactory instead, so the validator can honour the
+	// explicit --config path.
 	validate func(context.Context, string) error
+	// validateFactory builds the production validator for the parsed command
+	// line. Tests inject validate directly and leave this nil.
+	validateFactory func(configPath string) func(context.Context, string) error
 	// keyring is the OS secret store, or nil to force the file fallback.
 	keyring credentials.Keyring
 	// interactive reports whether stdin is a terminal.
@@ -105,6 +110,11 @@ func runWithDeps(args []string, stdin io.Reader, stdout, stderr io.Writer, d dep
 	case "config-reset":
 		return doConfigReset(paths, opts, stdout, stderr)
 	case "setup":
+		// Production builds supply a factory rather than a frozen validator so
+		// the bounded client honours the explicit --config path.
+		if d.validate == nil && d.validateFactory != nil {
+			d.validate = d.validateFactory(opts.configPath)
+		}
 		return doSetup(paths, opts, stdin, stdout, stderr, d)
 	case "logout":
 		return doLogout(paths, stdout, stderr, d)

@@ -11,15 +11,14 @@ import (
 	"github.com/acevedomiguel/kimiburn/internal/credentials"
 )
 
-// defaultDeps returns the production seams. Token validation stays nil until
-// S1.4 supplies the bounded Kimi usage client; setup must never fabricate a
-// successful validation.
+// defaultDeps returns the production seams. Token validation is the bounded
+// Kimi usage client; setup must never fabricate a successful validation.
 func defaultDeps() deps {
 	return deps{
-		validate:    nil,
-		keyring:     credentials.NewOSKeyring(),
-		interactive: isTerminal,
-		readSecret:  readSecretNoEcho,
+		validateFactory: validateToken,
+		keyring:         credentials.NewOSKeyring(),
+		interactive:     isTerminal,
+		readSecret:      readSecretNoEcho,
 	}
 }
 
