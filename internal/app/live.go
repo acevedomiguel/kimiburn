@@ -10,6 +10,7 @@ import (
 	"github.com/acevedomiguel/kimiburn/internal/credentials"
 	"github.com/acevedomiguel/kimiburn/internal/domain"
 	"github.com/acevedomiguel/kimiburn/internal/kimi"
+	"github.com/acevedomiguel/kimiburn/internal/runway"
 )
 
 // LiveOptions describes the production adapters without coupling the
@@ -115,16 +116,17 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 			reading.ObservedAt = live.Now()
 		}
 		result.Snapshot = NewSnapshot(reading)
-		if live.NoCache {
-			return result
-		}
-
 		mu.Lock()
 		defer mu.Unlock()
-		state.CacheVersion = domain.CacheSchemaVersion
-		state.Snapshot = &result.Snapshot
 		if state.Samples == nil {
 			state.Samples = make(map[domain.QuotaKey][]domain.Sample)
+		}
+		runway.RecordReading(state.Samples, reading)
+		result.Snapshot.Runways = runway.CalculateRunways(state.Samples, reading)
+		state.CacheVersion = domain.CacheSchemaVersion
+		state.Snapshot = &result.Snapshot
+		if live.NoCache {
+			return result
 		}
 		if err := live.Store.Save(state); err != nil {
 			result.Snapshot.Warnings = append(result.Snapshot.Warnings, domain.Warning{Section: "Cache", Message: "could not save state: " + redactor.Redact(err.Error())})

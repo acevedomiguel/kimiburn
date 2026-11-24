@@ -11,6 +11,7 @@ import (
 	"github.com/acevedomiguel/kimiburn/internal/config"
 	"github.com/acevedomiguel/kimiburn/internal/credentials"
 	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/kimiburn/internal/runway"
 )
 
 // doJSON performs one live read and emits exactly one schema-1 document. It
@@ -74,11 +75,13 @@ func doJSON(paths config.Paths, opts options, stdout, stderr io.Writer, d deps) 
 		if cacheWarning != nil {
 			snapshot.Warnings = append(snapshot.Warnings, *cacheWarning)
 		}
-		state.CacheVersion = domain.CacheSchemaVersion
-		state.Snapshot = &snapshot
 		if state.Samples == nil {
 			state.Samples = make(map[domain.QuotaKey][]domain.Sample)
 		}
+		runway.RecordReading(state.Samples, reading)
+		snapshot.Runways = runway.CalculateRunways(state.Samples, reading)
+		state.CacheVersion = domain.CacheSchemaVersion
+		state.Snapshot = &snapshot
 		if !opts.noCache {
 			if err := stateStore.Save(state); err != nil {
 				snapshot.Warnings = append(snapshot.Warnings, domain.Warning{Section: "Cache", Message: "could not save state: " + redactor.Redact(err.Error())})

@@ -116,6 +116,16 @@ func TestHelpAndScrollRestore(t *testing.T) {
 	}
 }
 
+func TestHelpExplainsRunwayStatesAndConfidence(t *testing.T) {
+	m := NewModel(Options{Width: 100, Height: 40, Snapshot: ui.SyntheticSnapshot()})
+	help := strings.Join(m.helpLines(), "\n")
+	for _, phrase := range []string{"not a server-provided prediction", "Beyond reset", "No consumption", "Depleted", "insufficient samples", "low", "medium", "high", "reset"} {
+		if !strings.Contains(help, phrase) {
+			t.Fatalf("help lacks %q:\n%s", phrase, help)
+		}
+	}
+}
+
 func TestFatalAndSetupRenderWithoutData(t *testing.T) {
 	m := NewModel(Options{Width: 80, Height: 24})
 	m.state, m.errText = ViewFatal, "request failed"
