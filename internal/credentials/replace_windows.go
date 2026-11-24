@@ -17,7 +17,12 @@ func replaceFile(src, dst string) error {
 	if err == nil {
 		return nil
 	}
-	if _, statErr := os.Stat(dst); statErr != nil {
+	info, statErr := os.Stat(dst)
+	if statErr != nil {
+		return err
+	}
+	// Never remove a directory to make a credential write appear successful.
+	if info.IsDir() {
 		return err
 	}
 	if removeErr := os.Remove(dst); removeErr != nil {

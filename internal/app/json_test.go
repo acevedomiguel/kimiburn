@@ -40,6 +40,8 @@ func TestWriteJSONGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Git for Windows may check out text fixtures with CRLF line endings.
+	want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
 	if out.String() != string(want) {
 		t.Fatalf("JSON mismatch\n--- got ---\n%s\n--- want ---\n%s", out.String(), want)
 	}
