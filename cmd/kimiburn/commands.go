@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/acevedomiguel/kimiburn/internal/config"
 	"github.com/acevedomiguel/kimiburn/internal/credentials"
+	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/kimiburn/internal/kimi"
 )
 
 // defaultDeps returns the production seams. Token validation is the bounded
@@ -19,6 +22,10 @@ func defaultDeps() deps {
 		keyring:         credentials.NewOSKeyring(),
 		interactive:     isTerminal,
 		readSecret:      readSecretNoEcho,
+		newUsage: func(baseURL, token string) (domain.UsageSource, error) {
+			return kimi.NewClient(kimi.WithBaseURL(baseURL), kimi.WithToken(token), kimi.WithVersion(version))
+		},
+		now: time.Now,
 	}
 }
 

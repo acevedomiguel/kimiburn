@@ -39,6 +39,15 @@ const (
 	QuotaLimitMonthCode  QuotaKey = "limit_month_code"
 )
 
+// CanonicalQuotaKeys is the complete provider-neutral quota set. Public JSON
+// always includes all four keys, using null for an unreported quota.
+var CanonicalQuotaKeys = [...]QuotaKey{
+	QuotaLimit5h,
+	QuotaLimit7d,
+	QuotaLimitMonthTotal,
+	QuotaLimitMonthCode,
+}
+
 // QuotaSource records how a quota's numbers were obtained. It is empty until
 // the decoder assigns one.
 type QuotaSource string

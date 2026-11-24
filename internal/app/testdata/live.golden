@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-24T14:32:30Z",
+  "cached": false,
+  "cache_age_seconds": 0,
+  "source": {
+    "api_base": "https://api.kimi.com/coding/v1",
+    "endpoint": "/usages"
+  },
+  "quotas": {
+    "limit_5h": {
+      "source": "ratio",
+      "used_ratio": 0.72,
+      "remaining_ratio": 0.28,
+      "limit": null,
+      "used": null,
+      "remaining": null,
+      "reset_at": "2026-11-24T17:44:30Z",
+      "reset_in_seconds": 11520,
+      "runway": {
+        "status": "unavailable",
+        "reason": "insufficient_samples",
+        "seconds": null,
+        "exhausted_at": null,
+        "burn_ratio_per_second": null,
+        "burn_percent_per_hour": null,
+        "sample_count": 0,
+        "window_seconds": 0,
+        "confidence": "unavailable"
+      }
+    },
+    "limit_7d": null,
+    "limit_month_code": null,
+    "limit_month_total": {
+      "source": "ratio",
+      "used_ratio": 0.418,
+      "remaining_ratio": 0.582,
+      "limit": null,
+      "used": null,
+      "remaining": null,
+      "reset_at": "2026-12-12T20:32:30Z",
+      "reset_in_seconds": 1576800,
+      "runway": {
+        "status": "unavailable",
+        "reason": "insufficient_samples",
+        "seconds": null,
+        "exhausted_at": null,
+        "burn_ratio_per_second": null,
+        "burn_percent_per_hour": null,
+        "sample_count": 0,
+        "window_seconds": 0,
+        "confidence": "unavailable"
+      }
+    }
+  },
+  "goods_version": 2,
+  "booster_wallet": {
+    "synthetic_example_field": null
+  },
+  "raw": {
+    "goods_version": 2,
+    "usages": {
+      "limit_5h": {
+        "used_ratio": 0.72,
+        "reset_time": "2026-11-24T17:44:30Z"
+      },
+      "limit_month_total": {
+        "used_ratio": 0.418,
+        "reset_time": "2026-12-12T20:32:30Z"
+      }
+    },
+    "boosterWallet": {
+      "synthetic_example_field": null
+    },
+    "future_provider_field": "synthetic-passthrough-value"
+  },
+  "warnings": []
+}

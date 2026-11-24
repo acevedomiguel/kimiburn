@@ -89,19 +89,17 @@ func TestRunVersionPrintsVersionOnStdout(t *testing.T) {
 	assertNoStateWritten(t, home)
 }
 
-func TestRunWithoutArgsIsUsageError(t *testing.T) {
+func TestRunWithoutArgsInvokesDashboardEntryPoint(t *testing.T) {
 	isolatedEnv(t)
 	code, stdout, stderr := runCLI()
-	if code != exitUsage {
-		t.Errorf("exit code = %d, want %d", code, exitUsage)
+	if code != exitFailure {
+		t.Errorf("exit code = %d, want %d", code, exitFailure)
 	}
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
-	for _, want := range []string{"kimiburn: missing command", "Usage:"} {
-		if !strings.Contains(stderr, want) {
-			t.Errorf("stderr missing %q in:\n%s", want, stderr)
-		}
+	if !strings.Contains(stderr, "dashboard is not available") {
+		t.Errorf("stderr = %q", stderr)
 	}
 }
 
