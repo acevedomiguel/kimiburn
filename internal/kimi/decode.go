@@ -31,7 +31,8 @@ type legacyQuota struct {
 	reading domain.QuotaReading
 	// comparisonRatio retains finite legacy division for source consistency
 	// even when the value is outside the normalized [0,1] range.
-	comparisonRatio *float64
+	comparisonRatio       *float64
+	reconciliationInvalid bool
 }
 
 // decodeUsage maps recognized wire representations without ever interpreting
@@ -77,6 +78,10 @@ func decodeUsage(raw json.RawMessage, observedAt time.Time) domain.UsageReading 
 					quota.UsedRatio = nil
 					quota.ConflictReason = domain.ConflictSources
 					addWarning(&reading.Warnings, "Quota consistency", string(key)+": modern ratio is unavailable; legacy counts cannot replace it")
+				case legacyQuota.reconciliationInvalid:
+					quota.UsedRatio = nil
+					quota.ConflictReason = domain.ConflictSources
+					addWarning(&reading.Warnings, "Quota consistency", string(key)+": legacy counts are invalid; normalized ratio unavailable")
 				case legacyQuota.comparisonRatio != nil && !ratiosAgree(*quota.UsedRatio, *legacyQuota.comparisonRatio):
 					quota.UsedRatio = nil
 					quota.ConflictReason = domain.ConflictSources
@@ -149,13 +154,15 @@ func decodeLegacyWindow(raw json.RawMessage, warnings *[]domain.Warning) (legacy
 	}
 	for _, rawEntry := range entries {
 		var entry map[string]json.RawMessage
-		if err := json.Unmarshal(rawEntry, &entry); err != nil {
+		if isNull(rawEntry) || json.Unmarshal(rawEntry, &entry) != nil {
+			addWarning(warnings, string(domain.QuotaLimit5h), "limits entry is not an object; normalized five-hour quota unavailable")
 			continue
 		}
-		if !exactFiveHourWindow(entry) {
+		var window map[string]json.RawMessage
+		if isNull(entry["window"]) || json.Unmarshal(entry["window"], &window) != nil || !exactFiveHourWindow(window) {
 			continue
 		}
-		return decodeLegacy(rawEntry, domain.QuotaLimit5h, warnings)
+		return decodeLegacyObject(entry["detail"], domain.QuotaLimit5h, rawEntry, warnings)
 	}
 	return legacyQuota{}, false
 }
@@ -174,6 +181,10 @@ func exactFiveHourWindow(entry map[string]json.RawMessage) bool {
 }
 
 func decodeLegacy(raw json.RawMessage, key domain.QuotaKey, warnings *[]domain.Warning) (legacyQuota, bool) {
+	return decodeLegacyObject(raw, key, raw, warnings)
+}
+
+func decodeLegacyObject(raw json.RawMessage, key domain.QuotaKey, originalRaw json.RawMessage, warnings *[]domain.Warning) (legacyQuota, bool) {
 	if isNull(raw) {
 		return legacyQuota{}, false
 	}
@@ -190,8 +201,9 @@ func decodeLegacy(raw json.RawMessage, key domain.QuotaKey, warnings *[]domain.W
 		return legacyQuota{}, false
 	}
 
-	quota := domain.QuotaReading{Source: domain.SourceLegacyCounts, Raw: cloneRaw(raw)}
-	invalid := false
+	quota := domain.QuotaReading{Source: domain.SourceLegacyCounts, Raw: cloneRaw(originalRaw)}
+	normalizedInvalid := false
+	reconciliationInvalid := false
 	limit, limitPresent, limitValid := nonnegativeNumber(entry["limit"])
 	used, usedPresent, usedValid := nonnegativeNumber(entry["used"])
 	remaining, remainingPresent, remainingValid := nonnegativeNumber(entry["remaining"])
@@ -205,7 +217,10 @@ func decodeLegacy(raw json.RawMessage, key domain.QuotaKey, warnings *[]domain.W
 		{"remaining", remainingPresent, remainingValid},
 	} {
 		if field.present && !field.valid {
-			invalid = true
+			normalizedInvalid = true
+			if field.name != "remaining" || !usedPresent {
+				reconciliationInvalid = true
+			}
 			addWarning(warnings, string(key), field.name+" is malformed, non-finite, or negative; normalized value unavailable")
 		}
 	}
@@ -216,7 +231,8 @@ func decodeLegacy(raw json.RawMessage, key domain.QuotaKey, warnings *[]domain.W
 	if !usedPresent && limitPresent && limitValid && remainingPresent && remainingValid {
 		derived := *limit - *remaining
 		if derived < 0 {
-			invalid = true
+			normalizedInvalid = true
+			reconciliationInvalid = true
 			quota.Used = nil
 			addWarning(warnings, string(key), "derived used count is negative; normalized used count and ratio unavailable")
 		} else {
@@ -233,25 +249,27 @@ func decodeLegacy(raw json.RawMessage, key domain.QuotaKey, warnings *[]domain.W
 	quota.ResetAt = reset
 
 	var comparisonRatio *float64
-	if !invalid && quota.Limit != nil && quota.Used != nil {
+	if quota.Limit != nil && quota.Used != nil {
 		switch {
 		case *quota.Limit > 0:
 			ratio := *quota.Used / *quota.Limit
 			if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 {
+				reconciliationInvalid = true
 				addWarning(warnings, string(key), "derived used ratio is non-finite or outside [0,1]; normalized ratio unavailable")
 			} else {
 				comparisonRatio = floatPointer(ratio)
-				if ratio <= 1 {
-					quota.UsedRatio = floatPointer(ratio)
-				} else {
+				if ratio > 1 {
 					addWarning(warnings, string(key), "derived used ratio is non-finite or outside [0,1]; normalized ratio unavailable")
+				} else if !normalizedInvalid {
+					quota.UsedRatio = floatPointer(ratio)
 				}
 			}
 		case *quota.Used > 0:
+			reconciliationInvalid = true
 			addWarning(warnings, string(key), "zero limit with positive usage is invalid; normalized ratio unavailable")
 		}
 	}
-	return legacyQuota{reading: quota, comparisonRatio: comparisonRatio}, true
+	return legacyQuota{reading: quota, comparisonRatio: comparisonRatio, reconciliationInvalid: reconciliationInvalid}, true
 }
 
 // finiteNumber distinguishes absent/null from a recognized invalid value.

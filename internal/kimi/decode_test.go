@@ -176,18 +176,45 @@ func TestDecodeLegacyWeeklyDirectAndDerivedCounts(t *testing.T) {
 	}
 }
 
-func TestDecodeLegacyFiveHourWindowFilterIsExact(t *testing.T) {
-	reading := decodeSynthetic(t, `{"limits":[`+
-		`{"duration":300,"timeUnit":"TIME_UNIT_MINUTE","limit":10,"used":2,"remaining":8,"future":"keep"},`+
-		`{"duration":301,"timeUnit":"TIME_UNIT_MINUTE","limit":20,"used":4},`+
-		`{"duration":300,"timeUnit":"TIME_UNIT_HOUR","limit":30,"used":6},`+
-		`{"duration":"300","timeUnit":"TIME_UNIT_MINUTE","limit":40,"used":8}]}`)
-	requireNoWarnings(t, reading)
-	quota := reading.Quotas[domain.QuotaLimit5h]
-	requireRatio(t, quota, 0.2)
-	requireCount(t, quota.Limit, 10)
-	if len(reading.Quotas) != 1 {
-		t.Fatalf("quotas = %+v, want only exact 300-minute window", reading.Quotas)
+func TestDecodeLegacyFiveHourNestedWindowAndDetail(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		detail string
+	}{
+		{"direct", `{"limit":10,"used":2,"remaining":8,"resetTime":"2026-11-25T12:00:00Z","future":"keep"}`},
+		{"derived", `{"limit":10,"remaining":8}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			matching := `{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":` + tc.detail + `,"entryFuture":true}`
+			reading := decodeSynthetic(t, `{"limits":[`+matching+`,`+
+				`{"window":{"duration":301,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":20,"used":4}},`+
+				`{"window":{"duration":300,"timeUnit":"TIME_UNIT_HOUR"},"detail":{"limit":30,"used":6}},`+
+				`{"window":{"duration":"300","timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":40,"used":8}}]}`)
+			requireNoWarnings(t, reading)
+			quota := reading.Quotas[domain.QuotaLimit5h]
+			requireRatio(t, quota, 0.2)
+			requireCount(t, quota.Limit, 10)
+			requireCount(t, quota.Used, 2)
+			requireCount(t, quota.Remaining, 8)
+			if string(quota.Raw) != matching {
+				t.Fatalf("quota raw = %s, want full original entry %s", quota.Raw, matching)
+			}
+			if len(reading.Quotas) != 1 {
+				t.Fatalf("quotas = %+v, want only exact 300-minute window", reading.Quotas)
+			}
+		})
+	}
+}
+
+func TestDecodeLegacyLimitsRejectsNonObjectEntriesDeterministically(t *testing.T) {
+	raw := `{"limits":[42,{"window":{"duration":301,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":20,"used":4}}]}`
+	reading := decodeSynthetic(t, raw)
+	want := domain.Warning{Section: "limit_5h", Message: "limits entry is not an object; normalized five-hour quota unavailable"}
+	if len(reading.Warnings) != 1 || reading.Warnings[0] != want {
+		t.Fatalf("warnings = %v, want only %v", reading.Warnings, want)
+	}
+	if strings.Contains(reading.Warnings[0].Message, "42") {
+		t.Fatalf("warning exposed the malformed entry: %v", reading.Warnings[0])
 	}
 }
 
@@ -268,6 +295,45 @@ func TestDecodeModernLegacyRatioTolerance(t *testing.T) {
 				requireNoWarnings(t, reading)
 			}
 		})
+	}
+}
+
+func TestDecodeInvalidLegacyCountsConflictWithModern(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		usage string
+	}{
+		{"zero limit positive use", `{"limit":0,"used":1,"remaining":0}`},
+		{"finite counts with overflowing division", `{"limit":1e-308,"used":1e308,"remaining":0}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reading := decodeSynthetic(t, `{"usages":{"limit_7d":{"used_ratio":0.5}},"usage":`+tc.usage+`}`)
+			quota := reading.Quotas[domain.QuotaLimit7d]
+			if quota.UsedRatio != nil {
+				t.Fatalf("normalized ratio = %v, want nil", *quota.UsedRatio)
+			}
+			if quota.ConflictReason != domain.ConflictSources {
+				t.Fatalf("conflict reason = %q, want conflicting_sources", quota.ConflictReason)
+			}
+			foundConsistency := false
+			for _, warning := range reading.Warnings {
+				if warning.Section == "Quota consistency" {
+					foundConsistency = true
+				}
+			}
+			if !foundConsistency {
+				t.Fatalf("warnings = %v, want Quota consistency", reading.Warnings)
+			}
+		})
+	}
+}
+
+func TestDecodeIncompleteLegacyCountsDoNotConflictWithModern(t *testing.T) {
+	reading := decodeSynthetic(t, `{"usages":{"limit_7d":{"used_ratio":0.5}},"usage":{"limit":100}}`)
+	quota := reading.Quotas[domain.QuotaLimit7d]
+	requireRatio(t, quota, 0.5)
+	if quota.ConflictReason != "" {
+		t.Fatalf("incomplete counts produced conflict: %+v", quota)
 	}
 }
 
