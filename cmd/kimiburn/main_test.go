@@ -132,8 +132,10 @@ func TestDemoRunsSyntheticDashboardWithoutProvider(t *testing.T) {
 		}
 		return nil
 	}
-	if code := runWithDeps([]string{"demo"}, errorReader{}, &out, &errOut, d); code != exitOK {
-		t.Fatalf("exit=%d stderr=%s", code, errOut.String())
+	for _, args := range [][]string{{"demo"}, {"demo", "--no-color"}} {
+		if code := runWithDeps(args, errorReader{}, &out, &errOut, d); code != exitOK {
+			t.Fatalf("args=%v exit=%d stderr=%s", args, code, errOut.String())
+		}
 	}
 }
 

@@ -1,0 +1,16 @@
+# Non-secret Kimiburn configuration. Never add a token to this file.
+version: 1
+
+# Zero disables automatic polling; positive values must be at least 30s.
+refresh_interval: 30s
+
+# The only alternative is https://api.kimi.ai/coding/v1 (explicit overseas).
+base_url: https://api.kimi.com/coding/v1
+
+# theme: auto, dark, or light
+# color: auto, always, or never
+theme: auto
+color: auto
+
+# Prefer the OS keyring. If unavailable, a restricted fallback file is used.
+keyring: true

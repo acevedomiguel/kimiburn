@@ -194,6 +194,8 @@ func parse(args []string) (options, error) {
 		opts.command = "logout"
 	case rest[0] == "demo" && len(rest) == 1:
 		opts.command = "demo"
+	case rest[0] == "demo" && len(rest) == 2 && rest[1] == "--no-color":
+		opts.command, opts.noColor = "demo", true
 	default:
 		return options{}, &usageError{msg: fmt.Sprintf("unknown command %q", joinArgs(rest))}
 	}

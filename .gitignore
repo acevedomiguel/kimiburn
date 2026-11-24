@@ -1,10 +1,11 @@
 # SDD planning scratch
 /.superpowers/
 
-# Build output
+# Build and release tooling output
 /kimiburn
 /kimiburn.exe
 /dist/
+/node_modules/
 
 # Local credential and configuration files that must never be committed
 /token
