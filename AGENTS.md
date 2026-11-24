@@ -15,13 +15,17 @@ Go/Charm patterns, but no Routeburn or OpenRouter domain concept carries over.
 - The token is requested explicitly and resolved only from `KIMIBURN_TOKEN`, the
   OS keyring (`kimiburn`/`token`), or a restricted `token` file. Never read
   `KIMI_API_KEY`, Pi state, Kimi CLI state, or any other application's credential.
-- Never print credentials, authorization headers, raw response bodies, or real
-  account data in logs, errors, JSON, cache, UI, tests, fixtures, or commits.
-  Route user-visible errors through `internal/credentials/redact.go`.
+- Credentials and authorization headers are never exposed in any output,
+  including logs, errors, JSON, cache, UI, tests, fixtures, or commits; they are
+  stored only where the credential rules above allow. Route user-visible errors
+  through `internal/credentials/redact.go`.
+- Real account data is permitted only in the intended private local surfaces:
+  the UI, `--json` output, and the local cache. Never put real account data in
+  logs, errors, tests, fixtures, commits, or probe reports.
 - Tests are synthetic-only: hand-authored fixtures, fake clocks/keyrings/
   transports, temporary directories, and `httptest`. They must not reach the real
-  network, keyring, user configuration, user cache, or a real token. Never commit
-  a sanitized real response.
+  network, keyring, user configuration, user cache, or a real token, and must
+  never commit a sanitized real response as a fixture.
 
 ## Architecture boundaries
 
