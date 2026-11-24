@@ -43,13 +43,15 @@ func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []strin
 
 	code, codeOK := snapshot.Quotas[domain.QuotaLimitMonthCode]
 	legacy, legacyOK := snapshot.Quotas[domain.QuotaLimit7d]
-	if legacyOK && width >= 120 {
+	if legacyOK && codeOK && width >= 120 {
 		lines = append(lines, joinColumns(
-			quotaPanel("Kimi Code monthly", domain.QuotaLimitMonthCode, code, codeOK, snapshot.Runways[domain.QuotaLimitMonthCode], "", leftWidth, opts.Now, opts.Styles, true),
+			quotaPanel("Monthly Code allocation", domain.QuotaLimitMonthCode, code, true, snapshot.Runways[domain.QuotaLimitMonthCode], "", leftWidth, opts.Now, opts.Styles, true),
 			quotaPanel("7-day quota · legacy", domain.QuotaLimit7d, legacy, true, snapshot.Runways[domain.QuotaLimit7d], "", rightWidth, opts.Now, opts.Styles, false),
 		)...)
 	} else {
-		lines = append(lines, quotaPanel("Kimi Code monthly", domain.QuotaLimitMonthCode, code, codeOK, snapshot.Runways[domain.QuotaLimitMonthCode], "", width, opts.Now, opts.Styles, true)...)
+		if codeOK {
+			lines = append(lines, quotaPanel("Monthly Code allocation", domain.QuotaLimitMonthCode, code, true, snapshot.Runways[domain.QuotaLimitMonthCode], "", width, opts.Now, opts.Styles, true)...)
+		}
 		if legacyOK {
 			lines = append(lines, quotaPanel("7-day quota · legacy", domain.QuotaLimit7d, legacy, true, snapshot.Runways[domain.QuotaLimit7d], "", width, opts.Now, opts.Styles, false)...)
 		}
@@ -89,7 +91,7 @@ func RenderDashboard(snapshot domain.Snapshot, opts DashboardOptions) string {
 	end := minInt(len(body), scroll+bodyHeight)
 
 	lines := make([]string, 0, opts.Height)
-	title := "KIMIBURN · Kimi Code quota and local runway"
+	title := "KIMIBURN · Kimi Code quota and runway"
 	if opts.Demo {
 		title = "KIMIBURN · SYNTHETIC DATA · no provider calls"
 	}
@@ -115,17 +117,10 @@ func RenderDashboard(snapshot domain.Snapshot, opts DashboardOptions) string {
 func quotaPanel(title string, key domain.QuotaKey, quota domain.QuotaReading, ok bool, runway domain.RunwayEstimate, caption string, width int, now time.Time, st Styles, allocation bool) []string {
 	textWidth := width - 4
 	if !ok {
-		rows := []string{"Not reported by this account/API response", leader("Absolute amount", "Not reported", textWidth, st)}
-		if allocation {
-			rows = append(rows, "Allocation within shared membership · not additive")
-		}
-		return panelWithCaption(title, caption, rows, width, len(rows)+2, st)
+		return panelWithCaption(title, caption, []string{"Not reported by this account/API response"}, width, 3, st)
 	}
 
-	rows := []string{
-		leader("Used", FormatPercent(quota.UsedRatio), textWidth, st),
-		leader("Remaining", FormatPercent(remainingPointer(quota.UsedRatio)), textWidth, st),
-	}
+	rows := make([]string, 0, 6)
 	if validRatio(quota.UsedRatio) {
 		rows = append(rows, meter(*quota.UsedRatio, textWidth, st))
 	} else {
@@ -137,35 +132,23 @@ func quotaPanel(title string, key domain.QuotaKey, quota domain.QuotaReading, ok
 	}
 	rows = append(rows,
 		leader("Reset", resetValue, textWidth, st),
-		leader("Local runway", FormatRunway(runway, key), textWidth, st),
+		leader("Runway", FormatRunway(runway, key), textWidth, st),
 	)
 	if runway.Status == "finite" {
 		rows = append(rows, leader("Exhausts", FormatExhaustion(runway), textWidth, st))
 	}
-	rows = append(rows,
-		leader("Burn", FormatBurn(runway, key), textWidth, st),
-		leader("Samples", FormatRunwayBasis(runway), textWidth, st),
-	)
+	rows = append(rows, leader("Burn", FormatBurn(runway, key), textWidth, st))
 	if quota.Used != nil && quota.Limit != nil {
-		rows = append(rows, leader("Absolute", "Used "+FormatCount(quota.Used)+"/"+FormatCount(quota.Limit)+" requests", textWidth, st))
+		counts := FormatCount(quota.Used) + "/" + FormatCount(quota.Limit) + " used"
 		if quota.Remaining != nil {
-			rows = append(rows, leader("Remaining", FormatCount(quota.Remaining), textWidth, st))
+			counts += " · " + FormatCount(quota.Remaining) + " left"
 		}
-	} else {
-		rows = append(rows, leader("Absolute amount", "Not reported", textWidth, st))
+		rows = append(rows, leader("Requests", counts, textWidth, st))
 	}
 	if allocation {
-		rows = append(rows, "Allocation within shared membership · not additive")
+		rows = append(rows, "Included in monthly membership · not additional")
 	}
 	return panelWithCaption(title, caption, rows, width, len(rows)+2, st)
-}
-
-func remainingPointer(used *float64) *float64 {
-	if !validRatio(used) {
-		return nil
-	}
-	remaining := 1 - *used
-	return &remaining
 }
 
 func validRatio(ratio *float64) bool {

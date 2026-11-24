@@ -7,43 +7,40 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/acevedomiguel/kimiburn/internal/domain"
 )
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 func TestDashboardBodyShowsCoreFactsWithoutRawAdditionalData(t *testing.T) {
 	snapshot := SyntheticLegacySnapshot()
+	snapshot.Quotas[domain.QuotaLimitMonthCode] = domain.QuotaReading{UsedRatio: floatPointer(0.2)}
 	body := strings.Join(BuildDashboardBody(snapshot, DashboardOptions{Width: 100, Height: 40, Now: snapshot.GeneratedAt.Add(time.Minute), Styles: NewStyles(false)}), "\n")
 	for _, want := range []string{
-		"Monthly membership", "5-hour quota", "Kimi Code monthly", "7-day quota · legacy",
-		"41.8%", "72.0%", "Allocation within shared membership · not additive",
-		"121 · 1h 0m · high", "60 · 29m · medium",
-		"30 · 15m · medium", "Used 40/100 requests",
+		"Monthly membership", "5-hour quota", "Monthly Code allocation", "7-day quota · legacy",
+		"41.8%", "72.0%", "Included in monthly membership · not additional",
+		"Beyond this reset", "2h 20m", "Requests", "40/100 used · 60 left",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q\n%s", want, body)
 		}
 	}
-	if !regexp.MustCompile(`Remaining ·+ 60`).MatchString(body) {
-		t.Errorf("legacy remaining count missing\n%s", body)
-	}
-	for _, unwanted := range []string{"Additional API data", "future_provider_field", "synthetic-passthrough-value", `"limit_5h"`, `"limit_month_total"`} {
+	for _, unwanted := range []string{"Additional API data", "future_provider_field", "synthetic-passthrough-value", `"limit_5h"`, `"limit_month_total"`, "Samples", "confidence", "Absolute amount", "Local runway", "Reset in", "┬"} {
 		if strings.Contains(body, unwanted) {
 			t.Errorf("dashboard exposes raw provider JSON %q:\n%s", unwanted, body)
 		}
 	}
 }
 
-func TestLegacyPanelCollapsesAndMissingMonthlyCodeRemainsExplained(t *testing.T) {
+func TestLegacyAndMissingMonthlyCodePanelsCollapse(t *testing.T) {
 	snapshot := SyntheticSnapshot()
 	body := strings.Join(BuildDashboardBody(snapshot, DashboardOptions{Width: 80, Height: 24, Now: snapshot.GeneratedAt, Styles: NewStyles(false)}), "\n")
 	if strings.Contains(body, "7-day quota · legacy") {
 		t.Error("absent legacy panel did not collapse")
 	}
-	for _, want := range []string{"Kimi Code monthly", "Not reported by this account/API response", "Allocation within shared membership · not additive"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("body missing %q", want)
-		}
+	if strings.Contains(body, "Monthly Code allocation") || strings.Contains(body, "Not reported by this account/API response") {
+		t.Errorf("missing Code allocation should not render an empty panel:\n%s", body)
 	}
 }
 

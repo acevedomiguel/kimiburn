@@ -116,12 +116,17 @@ func TestHelpAndScrollRestore(t *testing.T) {
 	}
 }
 
-func TestHelpExplainsRunwayStatesAndConfidence(t *testing.T) {
+func TestHelpExplainsRunwayStatesWithoutConfidenceLabels(t *testing.T) {
 	m := NewModel(Options{Width: 100, Height: 40, Snapshot: ui.SyntheticSnapshot()})
 	help := strings.Join(m.helpLines(), "\n")
-	for _, phrase := range []string{"not a server-provided prediction", "Beyond reset", "No consumption", "Depleted", "insufficient samples", "low", "medium", "high", "reset"} {
+	for _, phrase := range []string{"Monthly Code allocation", "not a server-provided prediction", "Beyond reset", "No consumption", "Depleted", "insufficient samples", "reset"} {
 		if !strings.Contains(help, phrase) {
 			t.Fatalf("help lacks %q:\n%s", phrase, help)
+		}
+	}
+	for _, unwanted := range []string{"confidence", "Kimi Code monthly"} {
+		if strings.Contains(help, unwanted) {
+			t.Fatalf("help contains unwanted %q:\n%s", unwanted, help)
 		}
 	}
 }
@@ -135,6 +140,27 @@ func TestFatalAndSetupRenderWithoutData(t *testing.T) {
 	m.state = ViewSetup
 	if got := m.View().Content; !strings.Contains(got, "Token setup required") {
 		t.Fatalf("setup view: %s", got)
+	}
+}
+
+func TestDemoManualRefreshReloadsSyntheticDataWithoutWarning(t *testing.T) {
+	m := NewModel(Options{Demo: true, Width: 100, Height: 40})
+	updated, cmd := m.Update(m.Init()())
+	m = updated.(Model)
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	updated, cmd = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("demo refresh returned no command")
+	}
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if m.state != ViewReady || m.warning != "" {
+		t.Fatalf("demo refresh state=%v warning=%q", m.state, m.warning)
+	}
+	if strings.Contains(m.View().Content, "refresh is not configured") {
+		t.Fatal("demo refresh displayed a live-provider configuration warning")
 	}
 }
 

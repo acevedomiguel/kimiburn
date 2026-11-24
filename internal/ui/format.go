@@ -34,28 +34,28 @@ func FormatCount(count *float64) string {
 // overdue provider timestamp is not a runway estimate of zero.
 func FormatReset(reset *time.Time, now time.Time) string {
 	if reset == nil {
-		return "Reset not reported"
+		return "Not reported"
 	}
 	if !reset.After(now) {
-		return "Reset time passed · awaiting API update"
+		return "Passed · awaiting API update"
 	}
-	return "Reset in " + formatDuration(reset.Sub(now), false)
+	return "in " + formatDuration(reset.Sub(now), false)
 }
 
-// FormatRunway renders the local estimate and its sampling confidence.
+// FormatRunway renders the local estimate without implying exactness.
 func FormatRunway(runway domain.RunwayEstimate, key domain.QuotaKey) string {
 	switch runway.Status {
 	case "depleted":
 		return "Depleted"
 	case "beyond_reset":
-		return withConfidence("Beyond this reset", runway.Confidence)
+		return "Beyond this reset"
 	case "no_consumption":
-		return withConfidence("No consumption observed", runway.Confidence)
+		return "No consumption observed"
 	case "finite":
 		if runway.Seconds == nil || math.IsNaN(*runway.Seconds) || math.IsInf(*runway.Seconds, 0) {
 			return "Unavailable · non finite estimate"
 		}
-		return withConfidence(formatDuration(time.Duration(*runway.Seconds*float64(time.Second)), true), runway.Confidence)
+		return formatDuration(time.Duration(*runway.Seconds*float64(time.Second)), true)
 	default:
 		reason := strings.ReplaceAll(runway.Reason, "_", " ")
 		if reason == "" {
@@ -63,31 +63,6 @@ func FormatRunway(runway domain.RunwayEstimate, key domain.QuotaKey) string {
 		}
 		return "Unavailable · " + reason
 	}
-}
-
-// FormatRunwayBasis makes local sample progress visible instead of presenting
-// an unexplained unavailable estimate. Confidence is shown once enough samples
-// exist to calculate a burn rate.
-func FormatRunwayBasis(runway domain.RunwayEstimate) string {
-	window := formatDuration(time.Duration(runway.WindowSeconds)*time.Second, false)
-	if runway.Status == "unavailable" && runway.Reason == "insufficient_samples" {
-		return fmt.Sprintf("%d/5 · %s/2m", runway.SampleCount, window)
-	}
-	if runway.SampleCount <= 0 {
-		return "No usable local history"
-	}
-	basis := fmt.Sprintf("%d · %s", runway.SampleCount, window)
-	if runway.Confidence != "" && runway.Confidence != "unavailable" {
-		basis += " · " + runway.Confidence
-	}
-	return basis
-}
-
-func withConfidence(label, confidence string) string {
-	if confidence == "" {
-		confidence = "unavailable"
-	}
-	return label + " (" + confidence + " confidence)"
 }
 
 // FormatBurn converts the canonical ratio/second burn for the panel's period.

@@ -1,9 +1,9 @@
 # Kimiburn
 
 Kimiburn is a read-only terminal monitor for Kimi Code quotas. It shows the
-shared monthly membership, the Kimi Code monthly allocation, the rolling
-5-hour quota, and a legacy 7-day quota when the API reports one. It also derives
-local burn-rate and runway estimates from repeated observations.
+shared monthly membership, the Monthly Code allocation when reported, the
+rolling 5-hour quota, and a legacy 7-day quota when the API reports one. It
+also derives local burn-rate and runway estimates from repeated observations.
 
 Built with Go and Charm as a sibling of
 [Routeburn](https://github.com/acevedomiguel/routeburn).
@@ -14,7 +14,7 @@ Built with Go and Charm as a sibling of
 - Refreshes every 30 seconds by default, measured from request completion.
 - Preserves unknown provider fields in local `--json` output.
 - Keeps a private, versioned cache for offline display and local samples.
-- Labels cached data, parser conflicts, missing values, and low-confidence
+- Labels cached data, parser conflicts, missing values, and unavailable
   estimates instead of inventing plausible numbers.
 - Includes a deterministic synthetic demo that needs no token or network.
 
@@ -87,22 +87,21 @@ throttled to one attempt per 30 seconds. A 401/403 suspends automatic requests
 until a manual refresh succeeds. Refresh intervals below 30 seconds are
 rejected unless the value is zero.
 
-### Panels and local runway
+### Panels and runway
 
-The monthly membership and 5-hour panels have priority. Kimi Code monthly is
-shown as an allocation within membership. Legacy 7-day data appears only when
-reported. The dashboard keeps raw provider JSON out of the way; use `--json`
-when you need the complete structured response.
+The monthly membership and 5-hour panels have priority. Monthly Code allocation
+(`limit_month_code`) appears only when reported; it is included in the monthly
+membership, not an additional allowance. Legacy 7-day data also appears only
+when reported. Used and remaining percentages sit inside each bar. The
+dashboard keeps raw provider JSON out of the way; use `--json` when you need
+the complete structured response.
 
-Runway is calculated locally from successful live ratio samples. It is not a
-server forecast. At least five samples spanning 120 seconds are required.
-Confidence is low at that minimum, medium at 30 samples and 15 minutes, and
-high at 120 samples and 60 minutes. Each quota card shows its sample count,
-observation window, and confidence, including progress while samples are
-collected. A reset or ratio decrease clears only the
-affected quota's history. Forecasts never cross reset: `Beyond this reset` has
-no exhaustion timestamp. Missing resets, invalid ratios, and conflicting
-sources produce explicit unavailable reasons.
+Runway is calculated locally from successful live ratio samples. It is an
+approximation, not a server forecast. At least five samples spanning 120
+seconds are required. A reset or ratio decrease clears only the affected
+quota's history. Forecasts never cross reset: `Beyond this reset` has no
+exhaustion timestamp. Missing resets, invalid ratios, and conflicting sources
+produce explicit unavailable reasons.
 
 ## Configuration
 

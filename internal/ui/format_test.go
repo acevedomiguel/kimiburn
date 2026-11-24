@@ -30,24 +30,24 @@ func TestFormattingDistinguishesZeroMissingAndUnavailable(t *testing.T) {
 func TestResetAndRunwayFormatting(t *testing.T) {
 	now := time.Date(2026, 11, 24, 14, 32, 30, 0, time.UTC)
 	reset := now.Add(3*time.Hour + 12*time.Minute)
-	if got := FormatReset(&reset, now); got != "Reset in 3h 12m" {
+	if got := FormatReset(&reset, now); got != "in 3h 12m" {
 		t.Errorf("reset=%q", got)
 	}
 	overdue := now.Add(-time.Second)
-	if got := FormatReset(&overdue, now); got != "Reset time passed · awaiting API update" {
+	if got := FormatReset(&overdue, now); got != "Passed · awaiting API update" {
 		t.Errorf("overdue=%q", got)
 	}
-	if got := FormatReset(nil, now); got != "Reset not reported" {
+	if got := FormatReset(nil, now); got != "Not reported" {
 		t.Errorf("missing reset=%q", got)
 	}
 	seconds := 8400.0
 	finite := domain.RunwayEstimate{Status: "finite", Seconds: &seconds, Confidence: "medium"}
-	if got := FormatRunway(finite, domain.QuotaLimit5h); got != "2h 20m (medium confidence)" {
+	if got := FormatRunway(finite, domain.QuotaLimit5h); got != "2h 20m" {
 		t.Errorf("finite=%q", got)
 	}
 	seconds = 274800.0
 	finite.Seconds = &seconds
-	if got := FormatRunway(finite, domain.QuotaLimit5h); got != "3d 4h (medium confidence)" {
+	if got := FormatRunway(finite, domain.QuotaLimit5h); got != "3d 4h" {
 		t.Errorf("long finite=%q", got)
 	}
 	burn := 0.00003333333333333333
@@ -59,16 +59,5 @@ func TestResetAndRunwayFormatting(t *testing.T) {
 	finite.BurnRatioPerSecond = &burn
 	if got := FormatBurn(finite, domain.QuotaLimitMonthTotal); got != "0.90%/day" {
 		t.Errorf("day burn=%q", got)
-	}
-}
-
-func TestFormatRunwayBasisShowsSamplingProgressAndConfidence(t *testing.T) {
-	collecting := domain.RunwayEstimate{Status: "unavailable", Reason: "insufficient_samples", SampleCount: 1, WindowSeconds: 30}
-	if got := FormatRunwayBasis(collecting); got != "1/5 · <1m/2m" {
-		t.Fatalf("collecting basis = %q", got)
-	}
-	ready := domain.RunwayEstimate{Status: "finite", SampleCount: 60, WindowSeconds: 1770, Confidence: "medium"}
-	if got := FormatRunwayBasis(ready); got != "60 · 29m · medium" {
-		t.Fatalf("ready basis = %q", got)
 	}
 }

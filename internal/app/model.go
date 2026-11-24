@@ -208,6 +208,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 	case "r":
+		if m.demo {
+			return m, func() tea.Msg {
+				return refreshFinishedMsg(RefreshResult{Snapshot: ui.SyntheticSnapshot()})
+			}
+		}
 		cmd, _ := m.StartAttempt(true)
 		return m, cmd
 	case "?":
@@ -276,14 +281,13 @@ func (m Model) helpLines() []string {
 	lines := []string{
 		"KIMIBURN · Help",
 		"",
-		"Monthly membership is the shared membership quota. Kimi Code monthly is an",
-		"allocation within that membership, not an additional allowance.",
-		"Runway is derived locally from retained samples and is bounded by reset time.",
-		"It is not a server-provided prediction. Missing absolute amounts stay missing.",
+		"Monthly membership is the shared membership quota. Monthly Code allocation",
+		"is included in that membership, not an additional allowance.",
+		"Runway is estimated locally from retained readings and bounded by reset time.",
+		"It is approximate, not a server-provided prediction.",
 		"Finite forecasts stop strictly before reset; Beyond reset has no timestamp.",
 		"No consumption means burn was zero/negative; Depleted means 100% used.",
 		"Unavailable · insufficient samples needs 5 samples over at least 120 seconds.",
-		"Confidence: low at minimum, medium at 30 samples/15 minutes, high at 120/60.",
 		"A reset or ratio decrease clears only that quota's local history.",
 		"",
 		"[r] refresh   [↑↓/j/k] scroll   [pgup/pgdn] page   [home/end] jump",

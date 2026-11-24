@@ -18,10 +18,6 @@ const (
 	boxHorizontal  = "─"
 	boxVertical    = "│"
 	boxDot         = "·"
-	// boxTick is the title delimiter: a short stroke hanging down from the
-	// horizontal border, so the title reads as a notch in the line rather than
-	// as a full-height vertical bar interrupting it.
-	boxTick = "┬"
 )
 
 // panel draws one bordered box exactly width columns wide and height rows tall,
@@ -57,15 +53,14 @@ func focusedCaptionPanel(title, caption string, rows []string, width, height int
 	}
 
 	title = truncate(title, maxInt(inner-5, 1))
-	// The title sits in a notch: the border runs flat, dips down at each end of
-	// the word with a tick, and resumes. Every glyph on the border uses the same
-	// accent colour, corners included, so a panel never shows two border colours.
+	// Plain horizontal rules keep the title visually quiet and avoid
+	// introducing a second glyph that looks like a column separator.
 	titleStyle := st.CardHead
 	if focused && st.Enabled {
 		titleStyle = titleStyle.Reverse(true)
 	}
-	open := st.Accent.Render(boxHorizontal + boxTick + " ")
-	close := st.Accent.Render(" " + boxTick)
+	open := st.Accent.Render(boxHorizontal + " ")
+	close := st.Accent.Render(" " + boxHorizontal)
 	head := open + titleStyle.Render(title) + close
 	tail := ""
 	if caption != "" {
@@ -119,8 +114,9 @@ func leaderValue(label, value string, width int, st Styles, valueStyle lipgloss.
 	return st.Label.Render(label) + " " + st.Muted.Render(strings.Repeat(boxDot, dots)) + " " + valueStyle.Render(value)
 }
 
-// meter renders a proportional bar of width cells: filled blocks for the ratio,
-// dim blocks for the remainder. It sits inline with the number it describes.
+// meter renders a proportional bar with used and remaining percentages
+// overlaid at its left and right edges. Cell-level styles preserve the bar
+// colors without letting ANSI sequences affect its width.
 func meter(ratio float64, width int, st Styles) string {
 	if width < 1 {
 		width = 1
@@ -138,7 +134,58 @@ func meter(ratio float64, width int, st Styles) string {
 	if fill > width {
 		fill = width
 	}
-	return st.Bar.Render(strings.Repeat("▇", fill)) + st.Muted.Render(strings.Repeat("░", width-fill))
+
+	const (
+		meterUsed = iota
+		meterRemaining
+		meterUsedLabel
+		meterRemainingLabel
+	)
+	cells := make([]rune, width)
+	kinds := make([]int, width)
+	for i := range cells {
+		if i < fill {
+			cells[i] = '▇'
+			kinds[i] = meterUsed
+		} else {
+			cells[i] = '░'
+			kinds[i] = meterRemaining
+		}
+	}
+	used := FormatPercent(&ratio)
+	remainingRatio := 1 - ratio
+	remaining := FormatPercent(&remainingRatio)
+	if lipgloss.Width(used)+lipgloss.Width(remaining)+1 > width {
+		return st.Value.Render(padRight(truncate(used+" "+remaining, width), width))
+	}
+	for i, r := range []rune(used) {
+		cells[i], kinds[i] = r, meterUsedLabel
+	}
+	start := width - lipgloss.Width(remaining)
+	for i, r := range []rune(remaining) {
+		cells[start+i], kinds[start+i] = r, meterRemainingLabel
+	}
+
+	var out strings.Builder
+	for start := 0; start < width; {
+		end := start + 1
+		for end < width && kinds[end] == kinds[start] {
+			end++
+		}
+		text := string(cells[start:end])
+		switch kinds[start] {
+		case meterUsed:
+			out.WriteString(st.Bar.Render(text))
+		case meterRemaining:
+			out.WriteString(st.Muted.Render(text))
+		case meterUsedLabel:
+			out.WriteString(st.Value.Render(text))
+		default:
+			out.WriteString(st.Muted.Render(text))
+		}
+		start = end
+	}
+	return out.String()
 }
 
 // joinColumns places rendered blocks side by side, one space apart, padding
