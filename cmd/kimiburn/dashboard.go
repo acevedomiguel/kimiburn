@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -75,6 +77,27 @@ func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stde
 	modelOptions.Demo = false
 	modelOptions.Theme = cfg.Theme
 	modelOptions.TerminalProgress = terminalProgressSupported(os.Getenv)
+
+	// The Settings overlay can change the interval and replace the token. The
+	// interval is written back to the active configuration file, and the token
+	// is validated with one read before it is stored.
+	configTarget := paths.ConfigFile
+	if opts.configPath != "" {
+		configTarget = opts.configPath
+	}
+	modelOptions.IntervalOptions = app.DefaultIntervalOptions()
+	modelOptions.SetInterval = func(interval time.Duration) error {
+		return config.SaveRefreshInterval(configTarget, interval)
+	}
+	modelOptions.IntervalPinned = opts.refreshSet || strings.TrimSpace(os.Getenv("KIMIBURN_REFRESH_INTERVAL")) != ""
+	modelOptions.EnvToken = credentialStore.EnvironmentToken() != ""
+	validator := d.validate
+	if validator == nil && d.validateFactory != nil {
+		validator = d.validateFactory(opts.configPath)
+	}
+	modelOptions.ValidateToken = validator
+	modelOptions.SaveToken = credentialStore.Save
+
 	if d.runDashboard == nil {
 		fmt.Fprintln(stderr, "kimiburn: interactive runner is unavailable")
 		return exitFailure

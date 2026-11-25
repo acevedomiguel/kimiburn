@@ -23,6 +23,7 @@ const (
 	ViewSetup
 	ViewFatal
 	ViewHelp
+	ViewSettings
 )
 
 // RefreshRequest identifies one attempt. Generation prevents stale results;
@@ -53,10 +54,14 @@ type CacheResult struct {
 }
 
 type initMsg struct{}
-type tickMsg struct{}
+type tickMsg struct{ gen uint64 }
 type clockMsg struct{}
 type cacheLoadedMsg CacheResult
 type refreshFinishedMsg RefreshResult
+
+// tokenSavedMsg reports the outcome of validating and storing a replacement
+// token. err is already redacted, so it never carries the token.
+type tokenSavedMsg struct{ err error }
 
 // Options supplies all side effects and clock inputs to the interactive model.
 type Options struct {
@@ -79,6 +84,25 @@ type Options struct {
 	// TerminalProgress mirrors the 5-hour quota into the terminal's own
 	// progress indicator (OSC 9;4), for terminals known to support it.
 	TerminalProgress bool
+
+	// IntervalOptions are the selectable automatic-refresh intervals, in
+	// ascending order. Nil selects DefaultIntervalOptions.
+	IntervalOptions []time.Duration
+	// SetInterval persists an interval choice to the active configuration
+	// file. Nil makes the choice session-only, which is what demo mode uses.
+	SetInterval func(time.Duration) error
+	// IntervalPinned is true when a flag or environment variable outranks the
+	// saved file, so a change applies now but not on the next start.
+	IntervalPinned bool
+	// ValidateToken checks a candidate token with one bounded read. A nil
+	// ValidateToken or SaveToken disables in-app token replacement.
+	ValidateToken func(context.Context, string) error
+	// SaveToken stores a token that ValidateToken has already accepted,
+	// replacing the previous one.
+	SaveToken func(context.Context, string) error
+	// EnvToken is true when KIMIBURN_TOKEN supplies the token, so an in-app
+	// replacement cannot take effect until it is unset.
+	EnvToken bool
 }
 
 // Model is the complete Bubble Tea state for one Kimiburn process.
@@ -117,9 +141,26 @@ type Model struct {
 	lastAttempt   time.Time
 	nextAllowed   time.Time
 	nextTick      time.Time
+	tickGen       uint64
 	warning       string
 	notice        string
 	errText       string
+
+	// Settings overlay state and the side effects it drives.
+	intervalOptions []time.Duration
+	setInterval     func(time.Duration) error
+	intervalPinned  bool
+	validateToken   func(context.Context, string) error
+	saveToken       func(context.Context, string) error
+	envToken        bool
+	settingsKeys    ui.SettingsKeyMap
+	settingsFocus   int
+	settingsIndex   int
+	tokenInput      string
+	tokenEditing    bool
+	tokenSaving     bool
+	settingsMsg     string
+	settingsErr     bool
 }
 
 func NewModel(opts Options) Model {
@@ -134,6 +175,9 @@ func NewModel(opts Options) Model {
 	}
 	if !opts.IntervalSet && opts.Interval == 0 {
 		opts.Interval = 30 * time.Second
+	}
+	if len(opts.IntervalOptions) == 0 {
+		opts.IntervalOptions = DefaultIntervalOptions()
 	}
 	if opts.Demo {
 		// The demo clock starts at the fixture's reading time and advances in
@@ -163,6 +207,9 @@ func NewModel(opts Options) Model {
 		spinner: ui.NewSpinner(styles), interval: opts.Interval, now: opts.Now,
 		cancel: opts.Cancel, configured: opts.Configured, refresh: opts.Refresh,
 		demo: opts.Demo, termProgress: opts.TerminalProgress, warning: opts.Warning,
+		intervalOptions: opts.IntervalOptions, setInterval: opts.SetInterval, intervalPinned: opts.IntervalPinned,
+		validateToken: opts.ValidateToken, saveToken: opts.SaveToken, envToken: opts.EnvToken,
+		settingsKeys: ui.NewSettingsKeyMap(), settingsIndex: intervalIndexFor(opts.Interval, opts.IntervalOptions),
 	}
 }
 
@@ -228,7 +275,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		meters := m.syncMeters()
 		tick := m.armTick()
 		return m, tea.Batch(startup, meters, tick)
+	case tokenSavedMsg:
+		return m.applyTokenSaved(msg)
 	case tickMsg:
+		if msg.gen != m.tickGen {
+			// A re-armed timer superseded this chain; ignore the stale tick so
+			// changing the interval never runs two schedules at once.
+			return m, nil
+		}
 		attempt := m.startAttempt(false)
 		tick := m.armTick()
 		return m, tea.Batch(attempt, tick)
@@ -280,12 +334,14 @@ func (m *Model) startAttempt(manual bool) tea.Cmd {
 }
 
 // armTick schedules the next automatic read and remembers when it is due, for
-// the countdown in the freshness caption.
+// the countdown in the freshness caption. Each call supersedes the previous
+// timer, so re-arming after an interval change never leaves two chains running.
 func (m *Model) armTick() tea.Cmd {
 	now := m.now()
 	delay, _ := m.ScheduleDelay(now, m.interval)
 	m.nextTick = now.Add(delay)
-	return m.scheduleTick(now)
+	m.tickGen++
+	return m.scheduleTick(now, m.tickGen)
 }
 
 func (m *Model) scrollBy(delta int) {
@@ -309,6 +365,9 @@ func (m Model) quit() (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	page := maxInt(1, m.height-3)
+	if m.state == ViewSettings {
+		return m.handleSettingsKey(msg)
+	}
 	if m.state == ViewHelp {
 		// Esc, ? and q close the overlay and return to the dashboard; only
 		// ctrl+c quits from here.
@@ -341,6 +400,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Help):
 		if m.state == ViewReady {
 			m = m.openHelp()
+		}
+	case key.Matches(msg, m.keys.Settings):
+		if m.state == ViewReady || m.state == ViewSetup || m.state == ViewFatal {
+			m = m.openSettings()
 		}
 	case key.Matches(msg, m.keys.Up):
 		m.scrollBy(-1)
@@ -387,8 +450,10 @@ func (m Model) View() tea.View {
 		opts.HelpOpen = true
 		background := ui.RenderDashboard(m.snapshot, opts)
 		content = ui.HelpOverlay(background, m.styles, m.width, m.height, m.scroll, m.warnings())
+	case ViewSettings:
+		content = ui.SettingsOverlay(m.settingsBackground(), m.settingsOptions())
 	case ViewSetup:
-		body := "Token setup required\n\nRun: kimiburn setup\n\nThe interactive app never reads a token from the terminal."
+		body := "Token setup required\n\nRun: kimiburn setup\n\nOr press s for Settings and choose Update token."
 		if m.notice != "" {
 			body += "\n\n" + m.notice
 		}

@@ -165,7 +165,7 @@ func parse(args []string) (options, error) {
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.StringVar(&opts.configPath, "config", "", "use an explicit configuration file")
 	fs.BoolVar(&opts.jsonOutput, "json", false, "emit one schema-1 JSON snapshot")
-	fs.DurationVar(&opts.refreshInterval, "refresh", config.MinRefreshInterval, "automatic refresh interval (0 disables; otherwise at least 30s)")
+	fs.DurationVar(&opts.refreshInterval, "refresh", config.DefaultRefreshInterval, "automatic refresh interval (0 disables; otherwise at least 10s)")
 	fs.BoolVar(&opts.noCache, "no-cache", false, "disable cache reads and writes")
 	fs.BoolVar(&opts.noColor, "no-color", false, "disable terminal color")
 	if err := fs.Parse(args); err != nil {
@@ -231,7 +231,7 @@ func printUsage(w io.Writer) {
 		"\nFlags:\n"+
 		"  --config <path>           Use an explicit configuration file\n"+
 		"  --json                    Emit one JSON snapshot and exit\n"+
-		"  --refresh <duration>      Refresh interval: 0 or at least 30s\n"+
+		"  --refresh <duration>      Refresh interval: 0 or at least 10s\n"+
 		"  --no-cache                Disable cache reads and writes\n"+
 		"  --no-color                Disable terminal color\n"+
 		"  --version                 Print version and exit\n"+

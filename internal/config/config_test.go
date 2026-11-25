@@ -46,7 +46,7 @@ func TestValidateRejectsUnsupportedValues(t *testing.T) {
 
 	tests := map[string]func(*Config){
 		"wrong version":       func(c *Config) { c.Version = 2 },
-		"refresh below floor": func(c *Config) { c.RefreshInterval = 29 * time.Second },
+		"refresh below floor": func(c *Config) { c.RefreshInterval = 9 * time.Second },
 		"negative refresh":    func(c *Config) { c.RefreshInterval = -time.Second },
 		"empty base":          func(c *Config) { c.BaseURL = "" },
 		"http base":           func(c *Config) { c.BaseURL = "http://api.kimi.com/coding/v1" },
@@ -381,3 +381,118 @@ func TestSlashSuffixedBaseURLIsRejected(t *testing.T) {
 }
 
 func durationPtr(d time.Duration) *time.Duration { return &d }
+
+func TestTenSecondFloorIsAccepted(t *testing.T) {
+	// The Settings overlay offers 10s, so the loader must accept it.
+	cfg, err := Load(nil, nil, Overrides{RefreshInterval: durationPtr(10 * time.Second)})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.RefreshInterval != 10*time.Second {
+		t.Errorf("refresh interval = %v, want 10s", cfg.RefreshInterval)
+	}
+}
+
+func TestSaveRefreshIntervalPreservesOtherSettingsAndRestrictsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nested", "config.yaml")
+	body := "version: 1\nrefresh_interval: 45s\nbase_url: https://api.kimi.ai/coding/v1\ntheme: dark\ncolor: never\nkeyring: false\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SaveRefreshInterval(path, 5*time.Minute); err != nil {
+		t.Fatalf("SaveRefreshInterval: %v", err)
+	}
+
+	cfg, err := Load([]string{path}, nil)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if cfg.RefreshInterval != 5*time.Minute {
+		t.Errorf("refresh interval = %v, want 5m", cfg.RefreshInterval)
+	}
+	if cfg.BaseURL != OverseasBaseURL || cfg.Theme != "dark" || cfg.Color != "never" || cfg.Keyring {
+		t.Errorf("SaveRefreshInterval changed another setting: %+v", cfg)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "token") || strings.Contains(strings.ToLower(string(raw)), "secret") {
+		t.Errorf("saved config must never contain a credential:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), "refresh_interval: 5m") {
+		t.Errorf("interval should be written readably:\n%s", raw)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if PermissionsAreEnforced {
+		if perm := info.Mode().Perm(); perm&0o077 != 0 {
+			t.Errorf("permissions = %o, want no group/world access", perm)
+		}
+	}
+}
+
+func TestSaveRefreshIntervalCreatesFromDefaultsWhenAbsent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := SaveRefreshInterval(path, 10*time.Second); err != nil {
+		t.Fatalf("SaveRefreshInterval: %v", err)
+	}
+	cfg, err := Load([]string{path}, nil)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.RefreshInterval != 10*time.Second {
+		t.Errorf("refresh interval = %v, want 10s", cfg.RefreshInterval)
+	}
+	if cfg.BaseURL != DefaultBaseURL {
+		t.Errorf("base url = %q, want the default", cfg.BaseURL)
+	}
+}
+
+func TestSaveRefreshIntervalRejectsBelowFloorWithoutTouchingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("version: 1\nrefresh_interval: 30s\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveRefreshInterval(path, 2*time.Second); err == nil {
+		t.Fatal("expected a below-floor interval to be rejected")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "refresh_interval: 30s") {
+		t.Errorf("a rejected save must not rewrite the file:\n%s", raw)
+	}
+}
+
+func TestFormatIntervalMatchesParseableSpellings(t *testing.T) {
+	cases := map[time.Duration]string{
+		0:                "0s",
+		10 * time.Second: "10s",
+		30 * time.Second: "30s",
+		45 * time.Second: "45s",
+		time.Minute:      "1m",
+		5 * time.Minute:  "5m",
+		10 * time.Minute: "10m",
+		90 * time.Second: "1m30s",
+	}
+	for d, want := range cases {
+		if got := FormatInterval(d); got != want {
+			t.Errorf("FormatInterval(%v) = %q, want %q", d, got, want)
+		}
+		if _, err := time.ParseDuration(FormatInterval(d)); err != nil {
+			t.Errorf("FormatInterval(%v) = %q is not parseable: %v", d, FormatInterval(d), err)
+		}
+	}
+}

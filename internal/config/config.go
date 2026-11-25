@@ -14,8 +14,14 @@ import (
 )
 
 // MinRefreshInterval is the floor for a positive refresh interval. A zero
-// interval is valid and means automatic refresh is disabled.
-const MinRefreshInterval = 30 * time.Second
+// interval is valid and means automatic refresh is disabled. The floor is the
+// smallest selectable cadence, so the dashboard's Settings overlay can offer
+// 10s without producing a configuration the loader would reject.
+const MinRefreshInterval = 10 * time.Second
+
+// DefaultRefreshInterval is the interval used when neither the configuration
+// file, the environment, nor a flag selects one.
+const DefaultRefreshInterval = 30 * time.Second
 
 // DefaultBaseURL is the primary Kimi Code API base. The overseas base is the
 // only alternative; configuration accepts nothing else over plain HTTPS.
@@ -50,7 +56,7 @@ type Overrides struct {
 func Defaults() Config {
 	return Config{
 		Version:         1,
-		RefreshInterval: MinRefreshInterval,
+		RefreshInterval: DefaultRefreshInterval,
 		BaseURL:         DefaultBaseURL,
 		Theme:           "auto",
 		Color:           "auto",
@@ -216,15 +222,55 @@ func mergeFlags(cfg *Config, flags Overrides) error {
 // permissions, creating the parent directory when needed. It never writes a
 // credential.
 func WriteSample(path string) error {
+	return writeRestricted(path, []byte(sampleYAML))
+}
+
+// SaveRefreshInterval rewrites refresh_interval in the configuration file and
+// leaves every other setting untouched. A missing file is created from the
+// defaults, so the dashboard can persist a choice even before setup has written
+// one. The result is validated before it is written, and the file is always
+// owner-only. It never writes a credential.
+func SaveRefreshInterval(path string, interval time.Duration) error {
+	cfg := Defaults()
+	if err := mergeFile(&cfg, path); err != nil {
+		return err
+	}
+	cfg.RefreshInterval = interval
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return writeConfig(path, cfg)
+}
+
+// writeConfig serializes cfg with durations spelled readably ("30s", "5m")
+// rather than as raw nanoseconds, so the file stays hand-editable and matches
+// the documented format.
+func writeConfig(path string, cfg Config) error {
+	body, err := yaml.Marshal(fileConfig{
+		Version:         cfg.Version,
+		RefreshInterval: FormatInterval(cfg.RefreshInterval),
+		BaseURL:         cfg.BaseURL,
+		Theme:           cfg.Theme,
+		Color:           cfg.Color,
+		Keyring:         cfg.Keyring,
+	})
+	if err != nil {
+		return fmt.Errorf("config: encode %s: %w", path, err)
+	}
+	return writeRestricted(path, append([]byte(configHeader), body...))
+}
+
+// writeRestricted writes data to path inside a 0700 directory with 0600
+// permissions. WriteFile only applies the mode when it creates the file, so an
+// existing looser file is tightened explicitly. Windows has no POSIX bits, so
+// the tighten step is skipped there (PermissionsAreEnforced is false).
+func writeRestricted(path string, data []byte) error {
 	if err := os.MkdirAll(parentDir(path), 0o700); err != nil {
 		return fmt.Errorf("config: create directory: %w", err)
 	}
-	if err := os.WriteFile(path, []byte(sampleYAML), 0o600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("config: write %s: %w", path, err)
 	}
-	// WriteFile only applies the mode when it creates the file, so an existing
-	// looser file must be tightened explicitly. Windows has no POSIX bits, so
-	// this is skipped there (PermissionsAreEnforced is false).
 	if PermissionsAreEnforced {
 		if err := os.Chmod(path, 0o600); err != nil {
 			return fmt.Errorf("config: restrict %s: %w", path, err)
@@ -233,9 +279,32 @@ func WriteSample(path string) error {
 	return nil
 }
 
+// fileConfig is the on-disk configuration shape. The refresh interval is a
+// string so it round-trips as "30s" instead of a nanosecond count.
+type fileConfig struct {
+	Version         int    `yaml:"version"`
+	RefreshInterval string `yaml:"refresh_interval"`
+	BaseURL         string `yaml:"base_url"`
+	Theme           string `yaml:"theme"`
+	Color           string `yaml:"color"`
+	Keyring         bool   `yaml:"keyring"`
+}
+
+// FormatInterval renders a duration the way the configuration file spells it:
+// whole minutes as "Nm", a zero interval as "0s", and anything else with Go's
+// duration syntax. It is the inverse of the durations Load parses.
+func FormatInterval(d time.Duration) string {
+	if d > 0 && d%time.Minute == 0 {
+		return strconv.Itoa(int(d/time.Minute)) + "m"
+	}
+	return d.String()
+}
+
+// configHeader is the first line of every file Kimiburn writes.
+const configHeader = "# Kimiburn configuration. Credentials are never stored here.\n"
+
 // sampleYAML is the first-run configuration written by WriteSample.
-var sampleYAML = strings.Join([]string{
-	"# Kimiburn configuration. Credentials are never stored here.",
+var sampleYAML = configHeader + strings.Join([]string{
 	"version: 1",
 	"refresh_interval: 30s",
 	"base_url: " + DefaultBaseURL,

@@ -27,16 +27,18 @@ Built with Go and Charm as a sibling of
 ## What it does
 
 - Reads only `GET /usages` beneath the selected Kimi Code API base.
-- Refreshes every 30 seconds by default, measured from request completion.
+- Refreshes every 30 seconds by default, measured from request completion. The
+  interval is adjustable from the in-app Settings overlay (10s, 30s, 1m, 5m, 10m)
+  and saved to the configuration file.
 - Preserves unknown provider fields in local `--json` output.
 - Keeps a private, versioned cache for offline display and local samples.
 - Labels cached data, parser conflicts, missing values, and unavailable
   estimates instead of inventing plausible numbers.
 - Includes a deterministic synthetic demo that needs no token or network.
 - Built on [Charm](https://charm.land) v2: `help` and `key` bubbles drive the
-  footer and the Help overlay, a `spinner` marks refreshes, `progress` draws the
-  meters, `viewport` scrolls the body and Help, and the lipgloss compositor
-  lays Help over the dashboard.
+  footer, the Help overlay and the Settings overlay, a `spinner` marks
+  refreshes, `progress` draws the meters, `viewport` scrolls the body and Help,
+  and the lipgloss compositor lays Help and Settings over the dashboard.
 
 ## Installation
 
@@ -109,6 +111,12 @@ request, and then stores it. The OS keyring is preferred. If the
 keyring is unavailable, a permission-restricted fallback file is used. For a
 non-interactive process, set `KIMIBURN_TOKEN` in its environment.
 
+Replace the token later without leaving the dashboard: press `s` to open
+Settings, choose **Update token**, and enter the new token. It is hidden as you
+type, checked with one usage read, and saved only after that read succeeds; the
+previous token stays in place otherwise. When `KIMIBURN_TOKEN` is set it wins,
+so the overlay explains that it must be unset before a token can be stored here.
+
 ```sh
 printf '%s\n' "$KIMIBURN_TOKEN" | kimiburn setup
 ```
@@ -134,14 +142,19 @@ kimiburn --help
 kimiburn --version
 ```
 
-Dashboard keys: `r` refreshes, arrow keys, `j`/`k`, or the mouse wheel scroll,
-Page Up/Page Down scroll a page, Home/End jump, `?` opens help, and `q` or Esc
-quits. In Help, Esc, `?`, or `q` close the overlay and return to the dashboard;
-only Ctrl+C quits from there. A manual refresh is
+Dashboard keys: `r` refreshes, `s` opens Settings (refresh interval and token),
+arrow keys, `j`/`k`, or the mouse wheel scroll, Page Up/Page Down scroll a page,
+Home/End jump, `?` opens help, and `q` or Esc quits. In Help, Esc, `?`, or `q`
+close the overlay and return to the dashboard; only Ctrl+C quits from there. In
+Settings, Esc, `q`, or `s` closes it, `↑`/`↓` (or `j`/`k`) pick a row, `←`/`→`
+(or `h`/`l`) or a number key 1–5 chooses the interval, and Enter starts a token
+entry. While typing a token the letters are token content, so only Enter saves,
+Esc cancels, and Ctrl+C quits. A manual refresh is
 throttled to one attempt per 30 seconds. A 401/403 suspends automatic requests
-until a manual refresh succeeds. Refresh intervals below 30 seconds are
+until a manual refresh succeeds. Refresh intervals below 10 seconds are
 rejected unless the value is zero. Demo mode uses the same 30-second scheduler
-but refreshes only synthetic data and never contacts the provider.
+but refreshes only synthetic data and never contacts the provider, so its
+interval change is session-only and its token row is disabled.
 
 ### Panels and runway
 
@@ -244,6 +257,12 @@ keyring: true
 
 The only other accepted base is `https://api.kimi.ai/coding/v1`, selected
 explicitly for an overseas account. There is no automatic regional fallback.
+
+The in-app Settings overlay writes only `refresh_interval` back to the active
+configuration file and preserves every other key; the file stays `0600`. If
+`--refresh` or `KIMIBURN_REFRESH_INTERVAL` is set, that override still wins on
+the next start, and the overlay says so. A non-interactive process can always
+edit the YAML directly.
 
 Environment variables: `KIMIBURN_TOKEN`, `KIMIBURN_REFRESH_INTERVAL`,
 `KIMIBURN_BASE_URL`, `KIMIBURN_THEME`, `KIMIBURN_COLOR`, and
