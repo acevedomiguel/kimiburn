@@ -32,6 +32,10 @@ func defaultDeps() deps {
 }
 
 // configPathsFor picks the configuration file, honoring an explicit flag.
+func isAuthFailure(err error) bool {
+	return errors.Is(err, kimi.ErrUnauthorized) || errors.Is(err, kimi.ErrForbidden)
+}
+
 func configPathsFor(paths config.Paths, opts options) []string {
 	if opts.configPath != "" {
 		return []string{opts.configPath}

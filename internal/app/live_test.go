@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/acevedomiguel/kimiburn/internal/domain"
-	"github.com/acevedomiguel/kimiburn/internal/kimi"
 )
 
 type memoryStateStore struct {
@@ -81,16 +80,26 @@ func TestLiveOptionsCacheConfigurationAndSuccess(t *testing.T) {
 }
 
 func TestLiveOptionsFailuresAreRedactedAndClassified(t *testing.T) {
+	errUnauthorized := errors.New("synthetic unauthorized")
+	errForbidden := errors.New("synthetic forbidden")
+	errTransport := errors.New("synthetic transport")
 	for _, test := range []struct {
 		name string
 		err  error
 		auth bool
 	}{
-		{"unauthorized", kimi.ErrUnauthorized, true}, {"forbidden", kimi.ErrForbidden, true}, {"transport", kimi.ErrTransport, false},
+		{"unauthorized", errUnauthorized, true}, {"forbidden", errForbidden, true}, {"transport", errTransport, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := &memoryStateStore{state: domain.EmptyStoredState()}
-			opts, cancel, err := NewLiveModelOptions(LiveOptions{Store: store, ResolveToken: func(context.Context) (string, error) { return "never-print-test-secret", nil }, NewUsage: func(string, string) (domain.UsageSource, error) { return liveUsageSource{err: test.err}, nil }})
+			opts, cancel, err := NewLiveModelOptions(LiveOptions{
+				Store: store,
+				IsAuthFailure: func(err error) bool {
+					return errors.Is(err, errUnauthorized) || errors.Is(err, errForbidden)
+				},
+				ResolveToken: func(context.Context) (string, error) { return "never-print-test-secret", nil },
+				NewUsage: func(string, string) (domain.UsageSource, error) { return liveUsageSource{err: test.err}, nil },
+			})
 			if err != nil {
 				t.Fatal(err)
 			}

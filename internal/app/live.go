@@ -9,7 +9,6 @@ import (
 	"github.com/acevedomiguel/kimiburn/internal/cache"
 	"github.com/acevedomiguel/kimiburn/internal/credentials"
 	"github.com/acevedomiguel/kimiburn/internal/domain"
-	"github.com/acevedomiguel/kimiburn/internal/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/runway"
 )
 
@@ -22,8 +21,9 @@ type LiveOptions struct {
 	NoColor      bool
 	Store        cache.StateStore
 	ResolveToken func(context.Context) (string, error)
-	NewUsage     func(baseURL, token string) (domain.UsageSource, error)
-	Now          func() time.Time
+	NewUsage      func(baseURL, token string) (domain.UsageSource, error)
+	IsAuthFailure func(error) bool
+	Now           func() time.Time
 }
 
 type nextRefreshSource interface{ NextRefreshAllowedAt() time.Time }
@@ -103,7 +103,9 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 			result.NextAllowed = constrained.NextRefreshAllowedAt()
 		}
 		if fetchErr != nil {
-			result.AuthFailure = errors.Is(fetchErr, kimi.ErrUnauthorized) || errors.Is(fetchErr, kimi.ErrForbidden)
+			if live.IsAuthFailure != nil {
+				result.AuthFailure = live.IsAuthFailure(fetchErr)
+			}
 			message := redactor.Redact(fetchErr.Error())
 			if message == fetchErr.Error() {
 				result.Err = fetchErr

@@ -13,6 +13,7 @@ import (
 	"github.com/acevedomiguel/kimiburn/internal/config"
 	"github.com/acevedomiguel/kimiburn/internal/credentials"
 	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/kimiburn/internal/kimi"
 )
 
 // errorReader fails on any read, so a CLI path that prompts or consumes stdin
@@ -55,6 +56,25 @@ func assertNoStateWritten(t *testing.T, home string) {
 	})
 	if err != nil {
 		t.Fatalf("walking %s: %v", home, err)
+	}
+}
+
+func TestIsAuthFailure(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "wrapped unauthorized", err: errors.Join(errors.New("synthetic wrapper"), kimi.ErrUnauthorized), want: true},
+		{name: "wrapped forbidden", err: errors.Join(errors.New("synthetic wrapper"), kimi.ErrForbidden), want: true},
+		{name: "transport", err: kimi.ErrTransport, want: false},
+		{name: "nil", err: nil, want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isAuthFailure(test.err); got != test.want {
+				t.Fatalf("isAuthFailure() = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
 

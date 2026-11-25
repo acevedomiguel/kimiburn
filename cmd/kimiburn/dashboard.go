@@ -65,6 +65,7 @@ func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stde
 	modelOptions, cancel, err := app.NewLiveModelOptions(app.LiveOptions{
 		BaseURL: cfg.BaseURL, Interval: cfg.RefreshInterval, NoCache: opts.noCache, NoColor: noColor,
 		Store: stateStore, ResolveToken: credentialStore.Resolve, NewUsage: d.newUsage, Now: d.now,
+		IsAuthFailure: isAuthFailure,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "kimiburn: %s\n", earlyRedact(err.Error()))
