@@ -1,0 +1,22 @@
+cmd/kimiburn/commands.go
+  h_e179a2b614d4a3 35-38
+cmd/kimiburn/dashboard.go
+  h_e179a2b614d4a3 68
+cmd/kimiburn/main_test.go
+  h_e179a2b614d4a3 16,62-80
+internal/app/live.go
+  h_e179a2b614d4a3 24-26,106-108
+internal/app/live_test.go
+  h_e179a2b614d4a3 83-85,91,95-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "1dffa56bb6c15ed92385a2115a9fd59e1180939d",
+  "prompts": {},
+  "humans": {
+    "h_e179a2b614d4a3": {
+      "author": "Miguel Angel Acevedo <acevedomiguel@gmail.com>"
+    }
+  }
+}
