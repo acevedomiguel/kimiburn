@@ -1,0 +1,29 @@
+fetch.go
+  s_9027ebd5366023::t_30bafb4cb95dc5 1-43
+fetch_test.go
+  s_25091b16ed9515::t_088bc991ecfbb3 1-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "bb2ff29b83f5d08d1162db9b8b2b2a3bcc877798",
+  "prompts": {},
+  "sessions": {
+    "s_25091b16ed9515": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ce19ed9-01b5-4e5c-a5f3-f62fb9c7c9bd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Miguel Angel Acevedo <acevedomiguel@gmail.com>"
+    },
+    "s_9027ebd5366023": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b00f6ee3-3bf5-4b07-ac8c-79daf979b1f5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Miguel Angel Acevedo <acevedomiguel@gmail.com>"
+    }
+  }
+}
