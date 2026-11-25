@@ -45,6 +45,9 @@ func calculate(key domain.QuotaKey, samples []domain.Sample, quota domain.QuotaR
 		estimate.Reason = "insufficient_samples"
 		return currentWindowAverage(key, estimate, quota, now)
 	}
+	if key == domain.QuotaLimitMonthTotal || key == domain.QuotaLimitMonthCode {
+		return currentWindowAverage(key, estimate, quota, now)
+	}
 	times := make([]float64, len(samples))
 	ratios := make([]float64, len(samples))
 	var meanT, meanR float64
@@ -116,7 +119,8 @@ func CalculateRunways(history map[domain.QuotaKey][]domain.Sample, reading domai
 
 // currentWindowAverage estimates burn from consumption since the current
 // fixed quota window began. It provides an honest first-read estimate without
-// inventing historical samples; local OLS replaces it once enough exist.
+// inventing historical samples. Rolling quotas use local OLS once enough
+// samples exist; monthly quotas retain this full-window average.
 func currentWindowAverage(key domain.QuotaKey, estimate domain.RunwayEstimate, quota domain.QuotaReading, now time.Time) domain.RunwayEstimate {
 	if quota.ResetAt == nil {
 		return estimate
