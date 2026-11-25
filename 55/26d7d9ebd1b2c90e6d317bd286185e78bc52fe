@@ -1,0 +1,24 @@
+.github/workflows/ci.yml
+  h_e179a2b614d4a3 115-116
+.github/workflows/release.yml
+  h_e179a2b614d4a3 35-36
+.releaserc.json
+  h_e179a2b614d4a3 27
+package.json
+  h_e179a2b614d4a3 14-15
+scripts/check-module-version.mjs
+  h_e179a2b614d4a3 1-45
+tests/release/check-module-version.test.mjs
+  h_e179a2b614d4a3 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "5526d7d9ebd1b2c90e6d317bd286185e78bc52fe",
+  "prompts": {},
+  "humans": {
+    "h_e179a2b614d4a3": {
+      "author": "Miguel Angel Acevedo <acevedomiguel@gmail.com>"
+    }
+  }
+}
