@@ -7,6 +7,7 @@ import "charm.land/bubbles/v2/key"
 // it, so a binding can never be advertised without being handled.
 type KeyMap struct {
 	Refresh  key.Binding
+	Settings key.Binding
 	Up       key.Binding
 	Down     key.Binding
 	PageUp   key.Binding
@@ -22,6 +23,7 @@ type KeyMap struct {
 func NewKeyMap() KeyMap {
 	return KeyMap{
 		Refresh:  key.NewBinding(key.WithKeys("r"), key.WithHelp("[r]", "refresh")),
+		Settings: key.NewBinding(key.WithKeys("s"), key.WithHelp("[s]", "settings")),
 		Up:       key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("[↑/k]", "up")),
 		Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("[↑↓/j/k]", "scroll")),
 		PageUp:   key.NewBinding(key.WithKeys("pgup"), key.WithHelp("[pgup]", "page up")),
@@ -36,17 +38,50 @@ func NewKeyMap() KeyMap {
 
 // ShortHelp is the footer, in render order.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Refresh, k.Down, k.PageDown, k.Help, k.Quit}
+	return []key.Binding{k.Refresh, k.Settings, k.Down, k.PageDown, k.Help, k.Quit}
 }
 
 // FullHelp is the grouped list shown inside the Help overlay.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Refresh, k.Help},
+		{k.Refresh, k.Settings},
 		{k.Down, k.PageDown},
 		{k.Home, k.End},
-		{k.Quit, k.Escape},
+		{k.Help, k.Quit, k.Escape},
 	}
+}
+
+// SettingsKeyMap describes the keys available inside the Settings overlay.
+type SettingsKeyMap struct {
+	Move   key.Binding
+	Change key.Binding
+	Edit   key.Binding
+	Close  key.Binding
+	Quit   key.Binding
+}
+
+// NewSettingsKeyMap builds the Settings overlay bindings.
+func NewSettingsKeyMap() SettingsKeyMap {
+	return SettingsKeyMap{
+		Move:   key.NewBinding(key.WithKeys("up", "down", "k", "j"), key.WithHelp("[↑↓/j/k]", "select")),
+		Change: key.NewBinding(key.WithKeys("left", "right", "h", "l"), key.WithHelp("[←/→]", "interval")),
+		Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("[enter]", "update token")),
+		Close:  key.NewBinding(key.WithKeys("esc", "q", "s"), key.WithHelp("[esc]", "close")),
+		Quit:   key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("[ctrl+c]", "quit")),
+	}
+}
+
+// SettingsFooter is the Settings overlay's key hints. While a token is being
+// typed only the keys that apply in that mode are listed.
+func (k SettingsKeyMap) SettingsFooter(editing bool) [][]key.Binding {
+	if editing {
+		return [][]key.Binding{{
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("[enter]", "save")),
+			key.NewBinding(key.WithKeys("esc"), key.WithHelp("[esc]", "cancel")),
+			k.Quit,
+		}}
+	}
+	return [][]key.Binding{{k.Move, k.Change, k.Edit, k.Quit}}
 }
 
 // HelpKeyMap describes the keys available while the Help overlay is open.
