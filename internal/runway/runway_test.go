@@ -184,5 +184,60 @@ func TestCalculateRunwaysUsesCurrentWindowAverageOnFirstRead(t *testing.T) {
 	}
 }
 
+func TestCalculateRunwaysMonthlyAlwaysUsesCurrentWindowAverage(t *testing.T) {
+	now := time.Date(2026, 11, 24, 9, 24, 53, 0, time.UTC)
+	reset := time.Date(2026, 12, 17, 0, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
+	for _, test := range []struct {
+		name       string
+		key        domain.QuotaKey
+		used, step float64
+		wantStatus string
+	}{
+		{name: "membership", key: domain.QuotaLimitMonthTotal, used: .5, step: .05, wantStatus: "finite"},
+		{name: "codeAllocation", key: domain.QuotaLimitMonthCode, used: .5, step: .05, wantStatus: "finite"},
+		{name: "zeroUsage", key: domain.QuotaLimitMonthTotal, used: 0, step: 0, wantStatus: "no_consumption"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			samples := make([]domain.Sample, 5)
+			for i := range samples {
+				samples[i] = domain.Sample{
+					ObservedAt: now.Add(time.Duration(i-4) * 30 * time.Second),
+					UsedRatio:  test.used - float64(4-i)*test.step,
+					ResetAt:    reset,
+				}
+			}
+			reading := domain.UsageReading{ObservedAt: now, Quotas: map[domain.QuotaKey]domain.QuotaReading{
+				test.key: {UsedRatio: floatPointer(test.used), ResetAt: timePointer(reset)},
+			}}
+			got := CalculateRunways(map[domain.QuotaKey][]domain.Sample{test.key: samples}, reading)[test.key]
+			wantBurn := test.used / now.Sub(start).Seconds()
+			if got.Basis != "window_average" || got.Status != test.wantStatus {
+				t.Fatalf("estimate=%+v", got)
+			}
+			if got.BurnRatioPerSecond == nil || math.Abs(*got.BurnRatioPerSecond-wantBurn) > 1e-12 {
+				t.Fatalf("burn=%v want=%v", got.BurnRatioPerSecond, wantBurn)
+			}
+			localBurn := test.step / (30 * time.Second).Seconds()
+			if test.step > 0 && math.Abs(*got.BurnRatioPerSecond-localBurn) <= 1e-12 {
+				t.Fatalf("monthly burn used local sample slope: %v", *got.BurnRatioPerSecond)
+			}
+			if test.wantStatus == "no_consumption" {
+				if got.Seconds != nil || got.ExhaustedAt != nil {
+					t.Fatalf("zero-consumption forecast=%+v", got)
+				}
+				return
+			}
+			wantSeconds := (1 - test.used) / wantBurn
+			if got.Seconds == nil || math.Abs(*got.Seconds-wantSeconds) > 1e-6 {
+				t.Fatalf("seconds=%v want=%v", got.Seconds, wantSeconds)
+			}
+			if got.ExhaustedAt == nil || !got.ExhaustedAt.Before(reset) {
+				t.Fatalf("timestamp=%v reset=%v", got.ExhaustedAt, reset)
+			}
+		})
+	}
+}
+
 func floatPointer(v float64) *float64    { return &v }
 func timePointer(v time.Time) *time.Time { return &v }

@@ -73,10 +73,11 @@ absence of a field is not treated as zero.
 The usage response provides current quota and reset information, not a
 historical burn series or a server-computed exhaustion forecast. For a first
 reading, Kimiburn derives average burn from the elapsed portion of the current
-5-hour or 7-day window. Monthly estimates use the same reset date in the
-previous month, clamped to that month's last day. Once at least five samples
+5-hour or 7-day window. For these rolling quotas, once at least five samples
 spanning 120 seconds exist, local ordinary least squares replaces this initial
-average. Public JSON distinguishes these methods with `basis` values
+average. Monthly estimates always use the elapsed current monthly window,
+whose start is the same reset date in the previous month, clamped to that
+month's last day. Public JSON distinguishes these methods with `basis` values
 `window_average` and `local_samples`.
 
 Neither method implies that Kimi supplied the estimate. Reset changes and
