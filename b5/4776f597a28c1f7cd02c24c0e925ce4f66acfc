@@ -1,0 +1,16 @@
+internal/app/live.go
+  h_e179a2b614d4a3 18-23
+internal/app/live_test.go
+  h_e179a2b614d4a3 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "b54776f597a28c1f7cd02c24c0e925ce4f66acfc",
+  "prompts": {},
+  "humans": {
+    "h_e179a2b614d4a3": {
+      "author": "Miguel Angel Acevedo <acevedomiguel@gmail.com>"
+    }
+  }
+}
