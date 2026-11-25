@@ -98,7 +98,7 @@ func TestLiveOptionsFailuresAreRedactedAndClassified(t *testing.T) {
 					return errors.Is(err, errUnauthorized) || errors.Is(err, errForbidden)
 				},
 				ResolveToken: func(context.Context) (string, error) { return "never-print-test-secret", nil },
-				NewUsage: func(string, string) (domain.UsageSource, error) { return liveUsageSource{err: test.err}, nil },
+				NewUsage:     func(string, string) (domain.UsageSource, error) { return liveUsageSource{err: test.err}, nil },
 			})
 			if err != nil {
 				t.Fatal(err)

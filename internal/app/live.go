@@ -15,12 +15,12 @@ import (
 // LiveOptions describes the production adapters without coupling the
 // interactive model to a concrete credential, HTTP, or filesystem package.
 type LiveOptions struct {
-	BaseURL      string
-	Interval     time.Duration
-	NoCache      bool
-	NoColor      bool
-	Store        cache.StateStore
-	ResolveToken func(context.Context) (string, error)
+	BaseURL       string
+	Interval      time.Duration
+	NoCache       bool
+	NoColor       bool
+	Store         cache.StateStore
+	ResolveToken  func(context.Context) (string, error)
 	NewUsage      func(baseURL, token string) (domain.UsageSource, error)
 	IsAuthFailure func(error) bool
 	Now           func() time.Time
