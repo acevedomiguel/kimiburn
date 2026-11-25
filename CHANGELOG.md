@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/acevedomiguel/kimiburn/compare/v1.3.0...v1.4.0) (2026-11-25)
+
+### Features
+
+* add in-app settings for refresh interval and token ([#9](https://github.com/acevedomiguel/kimiburn/issues/9)) ([a77eb06](https://github.com/acevedomiguel/kimiburn/commit/a77eb06ec13fcc355214f15670b706d35abb7831))
+
 ## [1.3.0](https://github.com/acevedomiguel/kimiburn/compare/v1.2.1...v1.3.0) (2026-11-25)
 
 ### Features
