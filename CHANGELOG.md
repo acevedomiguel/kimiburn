@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/acevedomiguel/kimiburn/compare/v1.2.0...v1.2.1) (2026-11-25)
+
+### Bug Fixes
+
+* calculate monthly burn from current window ([#7](https://github.com/acevedomiguel/kimiburn/issues/7)) ([bdbc515](https://github.com/acevedomiguel/kimiburn/commit/bdbc515677ba09f0877251a6fadcc536da1f18a5))
+
 ## [1.2.0](https://github.com/acevedomiguel/kimiburn/compare/v1.1.3...v1.2.0) (2026-11-24)
 
 ### Features
