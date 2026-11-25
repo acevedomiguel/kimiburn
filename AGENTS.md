@@ -30,6 +30,10 @@ Go/Charm patterns, but no Routeburn or OpenRouter domain concept carries over.
 ## Architecture boundaries
 
 - Module `github.com/acevedomiguel/kimiburn`, binary built from `./cmd/kimiburn`.
+- The module-root package is the supported public Go facade. Callers supply the
+  token, HTTP/time dependencies, writers, and optional in-memory state; the
+  facade never reads env credentials, keyrings, config files, or caches
+  implicitly. Everything under `internal/` remains private.
 - `internal/app` and `internal/domain` must not import `internal/kimi`. The wire
   client maps responses into provider-neutral domain types behind `UsageSource`.
 - Preserve missing-versus-zero: optional values stay pointers/null, never a
@@ -77,6 +81,10 @@ Go/Charm patterns, but no Routeburn or OpenRouter domain concept carries over.
 
 ## Release automation
 
+- The unsuffixed Go module path stays on `v1.x.y`.
+  `scripts/check-module-version.mjs` runs in CI and semantic-release
+  `verifyReleaseCmd`; it must reject a release major that does not match
+  `go.mod`. Coordinate a `/v2` module-path migration before any future v2 tag.
 - `.goreleaser.yaml` intentionally publishes a Homebrew **cask** to
   `acevedomiguel/homebrew-kimiburn`, not a formula. Keep generation under
   `homebrew_casks` and do not hand-edit the tap from this repository.

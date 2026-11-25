@@ -178,6 +178,47 @@ never cross reset: `Beyond this reset` has no exhaustion timestamp. Missing
 resets, invalid ratios, and conflicting sources produce explicit unavailable
 reasons.
 
+## Use as a library
+
+Go 1.26.0 or newer can import the headless API directly:
+
+```sh
+go get github.com/acevedomiguel/kimiburn
+```
+
+```go
+source, err := kimiburn.NewSource(kimiburn.DefaultBaseURL, token)
+if err != nil {
+	return err
+}
+state := kimiburn.EmptyStoredState()
+snapshot, err := kimiburn.Fetch(context.Background(), source, &state)
+if err != nil {
+	return err
+}
+return kimiburn.WriteJSON(writer, snapshot, kimiburn.JSONOptions{
+	APIBase: kimiburn.DefaultBaseURL,
+	Now:     time.Now(),
+})
+```
+
+Import `github.com/acevedomiguel/kimiburn` as `kimiburn`; `token` and `writer`
+are supplied by the caller. Reuse `state` across reads to retain local runway
+history. Passing nil state to `Fetch` uses an ephemeral cold start instead.
+`WithHTTPClient` and `WithClock` inject network and time dependencies for
+callers and tests.
+
+The library never reads environment credentials, keyrings, configuration files,
+or caches implicitly, and never selects stdout or stderr itself. Raw provider
+JSON and caller-owned state can contain private account data; keep them out of
+logs and fixtures. The interactive terminal model and credential/cache stores
+remain internal.
+
+The Go API follows semantic versioning. Releases from the current unsuffixed
+module path stay on `v1.x.y`; a breaking change requires a coordinated
+`/v2` module-path migration before any `v2` tag. Release automation rejects a
+tag whose major version does not match `go.mod`.
+
 ## Configuration
 
 ```sh

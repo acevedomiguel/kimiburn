@@ -112,3 +112,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:release-notes
+      - run: npm run test:release
+      - run: npm run check:module-version -- 1.2.3
