@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/acevedomiguel/kimiburn/compare/v1.2.1...v1.3.0) (2026-11-25)
+
+### Features
+
+* expose kimiburn as an importable Go library ([0236285](https://github.com/acevedomiguel/kimiburn/commit/023628575886240ea053e994a4aaade56285582a))
+
 ## [1.2.1](https://github.com/acevedomiguel/kimiburn/compare/v1.2.0...v1.2.1) (2026-11-25)
 
 ### Bug Fixes
