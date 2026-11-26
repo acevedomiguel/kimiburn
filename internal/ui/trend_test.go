@@ -7,17 +7,17 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 func TestTimelinePlacesDepletionBeforeReset(t *testing.T) {
 	now := syntheticTime
 	reset := now.Add(4 * time.Hour)
-	quota := domain.QuotaReading{ResetAt: &reset}
+	quota := kimi.QuotaReading{ResetAt: &reset}
 	st := NewStyles(false)
 
 	half := 2 * 3600.0
-	row, ok := timelineRow(quota, domain.RunwayEstimate{Status: "finite", Seconds: &half}, 40, now, st)
+	row, ok := timelineRow(quota, kimi.RunwayEstimate{Status: "finite", Seconds: &half}, 40, now, st)
 	if !ok || lipgloss.Width(row) != 40 {
 		t.Fatalf("finite row ok=%t width=%d: %q", ok, lipgloss.Width(row), row)
 	}
@@ -28,24 +28,24 @@ func TestTimelinePlacesDepletionBeforeReset(t *testing.T) {
 	}
 
 	for _, status := range []string{"beyond_reset", "no_consumption"} {
-		row, ok = timelineRow(quota, domain.RunwayEstimate{Status: status}, 40, now, st)
+		row, ok = timelineRow(quota, kimi.RunwayEstimate{Status: status}, 40, now, st)
 		if !ok || !strings.HasSuffix(row, "reset ✓") || strings.Contains(row, "✕") || lipgloss.Width(row) != 40 {
 			t.Fatalf("%s row: %q", status, row)
 		}
 	}
 
-	row, ok = timelineRow(quota, domain.RunwayEstimate{Status: "depleted"}, 40, now, st)
+	row, ok = timelineRow(quota, kimi.RunwayEstimate{Status: "depleted"}, 40, now, st)
 	if !ok || !strings.HasPrefix(row, "now ✕") {
 		t.Fatalf("depleted row: %q", row)
 	}
 
 	for name, args := range map[string]struct {
-		quota  domain.QuotaReading
-		runway domain.RunwayEstimate
+		quota  kimi.QuotaReading
+		runway kimi.RunwayEstimate
 	}{
-		"unavailable":  {quota, domain.RunwayEstimate{Status: "unavailable"}},
-		"no reset":     {domain.QuotaReading{}, domain.RunwayEstimate{Status: "beyond_reset"}},
-		"passed reset": {domain.QuotaReading{ResetAt: &now}, domain.RunwayEstimate{Status: "beyond_reset"}},
+		"unavailable":  {quota, kimi.RunwayEstimate{Status: "unavailable"}},
+		"no reset":     {kimi.QuotaReading{}, kimi.RunwayEstimate{Status: "beyond_reset"}},
+		"passed reset": {kimi.QuotaReading{ResetAt: &now}, kimi.RunwayEstimate{Status: "beyond_reset"}},
 	} {
 		if row, ok := timelineRow(args.quota, args.runway, 40, now, st); ok {
 			t.Errorf("%s: drew a timeline without a comparison: %q", name, row)
@@ -56,7 +56,7 @@ func TestTimelinePlacesDepletionBeforeReset(t *testing.T) {
 func TestTrendNeedsASpanAndReportsUsedChange(t *testing.T) {
 	st := NewStyles(false)
 	start := syntheticTime
-	samples := []domain.Sample{
+	samples := []kimi.Sample{
 		{ObservedAt: start, UsedRatio: 0.10},
 		{ObservedAt: start.Add(10 * time.Minute), UsedRatio: 0.12},
 		{ObservedAt: start.Add(20 * time.Minute), UsedRatio: 0.20},
@@ -69,7 +69,7 @@ func TestTrendNeedsASpanAndReportsUsedChange(t *testing.T) {
 		t.Fatalf("trend row: %q", row)
 	}
 
-	small := []domain.Sample{{ObservedAt: start, UsedRatio: 0.1}, {ObservedAt: start.Add(time.Hour), UsedRatio: 0.1004}}
+	small := []kimi.Sample{{ObservedAt: start, UsedRatio: 0.1}, {ObservedAt: start.Add(time.Hour), UsedRatio: 0.1004}}
 	if row, _ := trendRow(small, 40, start, st); !strings.HasSuffix(row, "+0.04% in 1h 0m") {
 		t.Fatalf("sub-percent change lost its precision: %q", row)
 	}
@@ -77,7 +77,7 @@ func TestTrendNeedsASpanAndReportsUsedChange(t *testing.T) {
 	if _, ok := trendRow(samples[:1], 40, start, st); ok {
 		t.Error("one sample drew a trend")
 	}
-	short := []domain.Sample{{ObservedAt: start}, {ObservedAt: start.Add(30 * time.Second)}}
+	short := []kimi.Sample{{ObservedAt: start}, {ObservedAt: start.Add(30 * time.Second)}}
 	if _, ok := trendRow(short, 40, start, st); ok {
 		t.Error("a sub-minute span drew a trend")
 	}
@@ -85,7 +85,7 @@ func TestTrendNeedsASpanAndReportsUsedChange(t *testing.T) {
 
 func TestTrendIgnoresSamplesFromAnEarlierResetPeriod(t *testing.T) {
 	old, current := syntheticTime, syntheticTime.Add(5*time.Hour)
-	samples := []domain.Sample{
+	samples := []kimi.Sample{
 		{ObservedAt: syntheticTime, ResetAt: old},
 		{ObservedAt: syntheticTime.Add(time.Minute), ResetAt: current},
 		{ObservedAt: syntheticTime.Add(2 * time.Minute), ResetAt: current},

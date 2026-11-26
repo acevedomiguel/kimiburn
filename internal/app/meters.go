@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/harmonica"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // meterFPS is the animation rate of the quota meters.
@@ -18,7 +18,7 @@ const meterFPS = 60
 var meterSpring = harmonica.NewSpring(harmonica.FPS(meterFPS), 18, 1)
 
 // meterOrder fixes the iteration order of the animated meters.
-var meterOrder = []domain.QuotaKey{domain.QuotaLimit5h, domain.QuotaLimitMonthTotal, domain.QuotaLimitMonthCode, domain.QuotaLimit7d}
+var meterOrder = []kimi.QuotaKey{kimi.QuotaLimit5h, kimi.QuotaLimitMonthTotal, kimi.QuotaLimitMonthCode, kimi.QuotaLimit7d}
 
 // meter is one animated remaining-quota bar: what it shows now, how fast it is
 // moving, and the reading it is moving towards.
@@ -85,8 +85,8 @@ func (m *Model) stepMeters(msg meterFrameMsg) tea.Cmd {
 }
 
 // shownMeters is what each bar currently draws, for the renderer.
-func (m Model) shownMeters() map[domain.QuotaKey]float64 {
-	shown := make(map[domain.QuotaKey]float64, len(m.meters))
+func (m Model) shownMeters() map[kimi.QuotaKey]float64 {
+	shown := make(map[kimi.QuotaKey]float64, len(m.meters))
 	for key, current := range m.meters {
 		shown[key] = math.Max(0, math.Min(1, current.shown))
 	}
@@ -95,8 +95,8 @@ func (m Model) shownMeters() map[domain.QuotaKey]float64 {
 
 // cloneMeters copies the meter map before a change, so a Model value that was
 // copied earlier never sees a later frame's state.
-func cloneMeters(in map[domain.QuotaKey]meter) map[domain.QuotaKey]meter {
-	out := make(map[domain.QuotaKey]meter, len(in))
+func cloneMeters(in map[kimi.QuotaKey]meter) map[kimi.QuotaKey]meter {
+	out := make(map[kimi.QuotaKey]meter, len(in))
 	for key, value := range in {
 		out[key] = value
 	}

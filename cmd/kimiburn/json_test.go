@@ -11,27 +11,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acevedomiguel/kimiburn/internal/cache"
-	"github.com/acevedomiguel/kimiburn/internal/config"
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 type memoryStateStore struct {
-	state   domain.StoredState
+	state   kimi.StoredState
 	loadErr error
 	saveErr error
 	loads   int
 	saves   int
 }
 
-func (s *memoryStateStore) Load() (domain.StoredState, error) {
+func (s *memoryStateStore) Load() (kimi.StoredState, error) {
 	s.loads++
 	if s.loadErr != nil {
-		return domain.StoredState{}, s.loadErr
+		return kimi.StoredState{}, s.loadErr
 	}
 	return s.state, nil
 }
-func (s *memoryStateStore) Save(state domain.StoredState) error {
+func (s *memoryStateStore) Save(state kimi.StoredState) error {
 	s.saves++
 	if s.saveErr != nil {
 		return s.saveErr
@@ -41,33 +39,33 @@ func (s *memoryStateStore) Save(state domain.StoredState) error {
 }
 
 type fakeUsageSource struct {
-	reading domain.UsageReading
+	reading kimi.UsageReading
 	err     error
 	calls   int
 }
 
-func (s *fakeUsageSource) ReadUsage(context.Context) (domain.UsageReading, error) {
+func (s *fakeUsageSource) ReadUsage(context.Context) (kimi.UsageReading, error) {
 	s.calls++
 	return s.reading, s.err
 }
 func (*fakeUsageSource) NextRefreshAllowedAt() time.Time { return time.Time{} }
 
-func syntheticReading(now time.Time) domain.UsageReading {
+func syntheticReading(now time.Time) kimi.UsageReading {
 	used := 0.25
 	reset := now.Add(4 * time.Hour)
-	return domain.UsageReading{
+	return kimi.UsageReading{
 		ObservedAt: now,
-		Quotas: map[domain.QuotaKey]domain.QuotaReading{
-			domain.QuotaLimit5h: {Source: domain.SourceRatio, UsedRatio: &used, ResetAt: &reset, Raw: json.RawMessage(`{"used_ratio":0.25}`)},
+		Quotas: map[kimi.QuotaKey]kimi.QuotaReading{
+			kimi.QuotaLimit5h: {Source: kimi.SourceRatio, UsedRatio: &used, ResetAt: &reset, Raw: json.RawMessage(`{"used_ratio":0.25}`)},
 		},
 		Raw:      json.RawMessage(`{"usages":{"limit_5h":{"used_ratio":0.25}},"future_provider_field":"synthetic-passthrough-value"}`),
-		Warnings: []domain.Warning{},
+		Warnings: []kimi.Warning{},
 	}
 }
 
-func jsonDeps(store cache.StateStore, source domain.UsageSource, now time.Time) deps {
+func jsonDeps(store kimi.StateStore, source kimi.UsageSource, now time.Time) deps {
 	return deps{
-		newUsage: func(baseURL, token string) (domain.UsageSource, error) {
+		newUsage: func(baseURL, token string) (kimi.UsageSource, error) {
 			if token == "" {
 				return nil, errors.New("empty token")
 			}
@@ -88,7 +86,7 @@ func TestJSONLiveSuccessSavesSnapshotAndEmitsOnlyJSON(t *testing.T) {
 	isolatedEnv(t)
 	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.UTC)
 	t.Setenv("KIMIBURN_TOKEN", "synthetic-cli-token")
-	store := &memoryStateStore{state: domain.EmptyStoredState()}
+	store := &memoryStateStore{state: kimi.EmptyStoredState()}
 	source := &fakeUsageSource{reading: syntheticReading(now)}
 	code, stdout, stderr := runJSONWithDeps([]string{"--json", "--refresh", "30s"}, jsonDeps(store, source, now))
 	if code != exitOK || stderr != "" {
@@ -130,17 +128,17 @@ func TestJSONFetchFailureUsesWarnedCachedSnapshot(t *testing.T) {
 	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.UTC)
 	t.Setenv("KIMIBURN_TOKEN", "synthetic-cli-token")
 	snapshot := syntheticSnapshot(now.Add(-time.Minute))
-	store := &memoryStateStore{state: domain.StoredState{CacheVersion: 1, Snapshot: &snapshot, Samples: map[domain.QuotaKey][]domain.Sample{}}}
+	store := &memoryStateStore{state: kimi.StoredState{CacheVersion: 1, Snapshot: &snapshot, Samples: map[kimi.QuotaKey][]kimi.Sample{}}}
 	source := &fakeUsageSource{err: errors.New("fetch failed for synthetic-cli-token")}
 	code, stdout, stderr := runJSONWithDeps([]string{"--json"}, jsonDeps(store, source, now))
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	var doc struct {
-		Cached      bool             `json:"cached"`
-		Age         int64            `json:"cache_age_seconds"`
-		GeneratedAt string           `json:"generated_at"`
-		Warnings    []domain.Warning `json:"warnings"`
+		Cached      bool           `json:"cached"`
+		Age         int64          `json:"cache_age_seconds"`
+		GeneratedAt string         `json:"generated_at"`
+		Warnings    []kimi.Warning `json:"warnings"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
 		t.Fatal(err)
@@ -159,7 +157,7 @@ func TestJSONFetchFailureUsesWarnedCachedSnapshot(t *testing.T) {
 func TestJSONFetchFailureWithoutCacheHasNoStdout(t *testing.T) {
 	isolatedEnv(t)
 	t.Setenv("KIMIBURN_TOKEN", "synthetic-cli-token")
-	store := &memoryStateStore{state: domain.EmptyStoredState()}
+	store := &memoryStateStore{state: kimi.EmptyStoredState()}
 	source := &fakeUsageSource{err: errors.New("fetch failed for synthetic-cli-token")}
 	code, stdout, stderr := runJSONWithDeps([]string{"--json"}, jsonDeps(store, source, time.Now()))
 	if code != exitFailure || stdout != "" {
@@ -172,7 +170,7 @@ func TestJSONFetchFailureWithoutCacheHasNoStdout(t *testing.T) {
 
 func TestJSONMissingTokenNeverPrompts(t *testing.T) {
 	isolatedEnv(t)
-	store := &memoryStateStore{state: domain.EmptyStoredState()}
+	store := &memoryStateStore{state: kimi.EmptyStoredState()}
 	source := &fakeUsageSource{}
 	code, stdout, stderr := runJSONWithDeps([]string{"--json"}, jsonDeps(store, source, time.Now()))
 	if code != exitCredentials || stdout != "" {
@@ -190,7 +188,7 @@ func TestJSONLiveCacheSaveFailureAddsWarningWithoutFailing(t *testing.T) {
 	isolatedEnv(t)
 	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.UTC)
 	t.Setenv("KIMIBURN_TOKEN", "synthetic-cli-token")
-	store := &memoryStateStore{state: domain.EmptyStoredState(), saveErr: errors.New("cannot save synthetic-cli-token")}
+	store := &memoryStateStore{state: kimi.EmptyStoredState(), saveErr: errors.New("cannot save synthetic-cli-token")}
 	source := &fakeUsageSource{reading: syntheticReading(now)}
 	code, stdout, stderr := runJSONWithDeps([]string{"--json"}, jsonDeps(store, source, now))
 	if code != exitOK || stderr != "" {
@@ -205,12 +203,12 @@ func TestJSONNoCacheNeverReadsOrWritesState(t *testing.T) {
 	home := isolatedEnv(t)
 	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.UTC)
 	t.Setenv("KIMIBURN_TOKEN", "synthetic-cli-token")
-	paths, err := config.DefaultPaths()
+	paths, err := kimi.DefaultPaths()
 	if err != nil {
 		t.Fatal(err)
 	}
 	snapshot := syntheticSnapshot(now.Add(-time.Minute))
-	if err := cache.NewStore(paths.CacheFile).Save(domain.StoredState{CacheVersion: 1, Snapshot: &snapshot}); err != nil {
+	if err := kimi.NewStateStore(paths.CacheFile).Save(kimi.StoredState{CacheVersion: 1, Snapshot: &snapshot}); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.ReadFile(paths.CacheFile)
@@ -244,12 +242,12 @@ func TestJSONRejectsInvalidRefreshAndCommandCombination(t *testing.T) {
 	}
 }
 
-func syntheticSnapshot(generated time.Time) domain.Snapshot {
+func syntheticSnapshot(generated time.Time) kimi.Snapshot {
 	reading := syntheticReading(generated)
-	snapshot := domain.Snapshot{
+	snapshot := kimi.Snapshot{
 		SchemaVersion: 1, GeneratedAt: generated, Quotas: reading.Quotas,
-		Runways: map[domain.QuotaKey]domain.RunwayEstimate{domain.QuotaLimit5h: {Status: "unavailable", Reason: "insufficient_samples", Confidence: "unavailable"}},
-		Raw:     reading.Raw, Warnings: []domain.Warning{},
+		Runways: map[kimi.QuotaKey]kimi.RunwayEstimate{kimi.QuotaLimit5h: {Status: "unavailable", Reason: "insufficient_samples", Confidence: "unavailable"}},
+		Raw:     reading.Raw, Warnings: []kimi.Warning{},
 	}
 	return snapshot
 }

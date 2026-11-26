@@ -10,7 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/ui"
 )
 
@@ -78,7 +78,7 @@ func TestMetersSpringToEachReading(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("first reading did not start the meter animation")
 	}
-	if got := m.shownMeters()[domain.QuotaLimit5h]; got != 0 {
+	if got := m.shownMeters()[kimi.QuotaLimit5h]; got != 0 {
 		t.Fatalf("a new meter starts at %.3f, want 0", got)
 	}
 	for i := 0; i < 600; i++ {
@@ -86,7 +86,7 @@ func TestMetersSpringToEachReading(t *testing.T) {
 			break
 		}
 	}
-	if got := m.shownMeters()[domain.QuotaLimit5h]; got < 0.279 || got > 0.281 {
+	if got := m.shownMeters()[kimi.QuotaLimit5h]; got < 0.279 || got > 0.281 {
 		t.Fatalf("5-hour meter settled at %.3f, want 0.28", got)
 	}
 	if m.stepMeters(meterFrameMsg{gen: m.meterGen - 1}) != nil {

@@ -7,7 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // sparkGlyphs are the eight block heights used by the usage trend.
@@ -21,7 +21,7 @@ const minTrendSpan = time.Minute
 // edge; ✕ marks the estimated depletion. Only relative positions are drawn, so
 // no absolute quota time appears on screen. It returns false when there is no
 // estimate or no future reset to compare against.
-func timelineRow(quota domain.QuotaReading, runway domain.RunwayEstimate, width int, now time.Time, st Styles) (string, bool) {
+func timelineRow(quota kimi.QuotaReading, runway kimi.RunwayEstimate, width int, now time.Time, st Styles) (string, bool) {
 	if quota.ResetAt == nil || !quota.ResetAt.After(now) {
 		return "", false
 	}
@@ -69,7 +69,7 @@ func timelineRow(quota domain.QuotaReading, runway domain.RunwayEstimate, width 
 // sparkline of used quota, followed by how much was used over that span. The
 // samples are the same ones the runway estimate is derived from, so the slope
 // on screen is the slope behind the forecast.
-func trendRow(samples []domain.Sample, width int, now time.Time, st Styles) (string, bool) {
+func trendRow(samples []kimi.Sample, width int, now time.Time, st Styles) (string, bool) {
 	if len(samples) < 2 {
 		return "", false
 	}
@@ -100,7 +100,7 @@ func trendRow(samples []domain.Sample, width int, now time.Time, st Styles) (str
 // sparkline resamples the series into width time buckets, carrying the last
 // reading forward, and scales the buckets between the window's lowest and
 // highest used ratio so a small but steady burn is still visible.
-func sparkline(samples []domain.Sample, width int) string {
+func sparkline(samples []kimi.Sample, width int) string {
 	start := samples[0].ObservedAt
 	span := samples[len(samples)-1].ObservedAt.Sub(start)
 	values := make([]float64, width)
