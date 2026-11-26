@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/acevedomiguel/kimiburn/compare/v1.4.0...v1.5.0) (2026-11-26)
+
+### Features
+
+* report the embedded burnblocks engine in help ([#11](https://github.com/acevedomiguel/kimiburn/issues/11)) ([b467274](https://github.com/acevedomiguel/kimiburn/commit/b467274f447d7632467c32181a4c4f22f04d338d))
+
 ## [1.4.0](https://github.com/acevedomiguel/kimiburn/compare/v1.3.0...v1.4.0) (2026-11-25)
 
 ### Features
