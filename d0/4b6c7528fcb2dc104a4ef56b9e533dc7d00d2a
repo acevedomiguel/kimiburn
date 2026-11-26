@@ -1,0 +1,88 @@
+internal/app/live.go
+  s_58b6f55c0833f4::t_588928d223a90c 9,19,21,36,38-39,44,48,68,80,92,126,135-136,138
+  s_58b6f55c0833f4::t_67a7d4f1696c28 117
+cmd/kimiburn/runway_json_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 8,16,18,20,23,30,36,40,49,56,62
+cmd/kimiburn/validate_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 13,168
+docs/api-contract.md
+  s_58b6f55c0833f4::t_ce13cb3526d11d 7-12
+internal/app/meters.go
+  s_58b6f55c0833f4::t_588928d223a90c 10,21,88-89,98-99
+go.mod
+  s_58b6f55c0833f4::t_03659069162f0b 15-16
+  s_58b6f55c0833f4::t_d5b854d233ff82 20
+  s_58b6f55c0833f4::t_3eb1303954fbac 17-19
+internal/ui/dashboard.go
+  s_58b6f55c0833f4::t_588928d223a90c 10,24,27,39,51,60,62,66-67,70,72,79,82,122,163,167-168,213-214,216,297,301
+internal/app/settings.go
+  s_58b6f55c0833f4::t_588928d223a90c 12,201,233
+internal/ui/format_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 7,24-25,34,54-55,60,65,70
+internal/app/live_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 10,14,19,22,26,33,38,45-47,49,53,74,94,101,113-115,128
+internal/ui/trend.go
+  s_58b6f55c0833f4::t_588928d223a90c 10,24,72,103
+cmd/kimiburn/credentials_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 13,26,30,37,45,49,64,70,150,207,228,239,243,314,411,528
+cmd/kimiburn/json_test.go
+  s_58b6f55c0833f4::t_adf4e2a834c8c0 138-140
+  s_58b6f55c0833f4::t_588928d223a90c 14,18,25,28,32,42,47,53,56,58-59,62,66,68,89,131,141,160,173,191,206,211,245,247,249-250
+cmd/kimiburn/json.go
+  s_58b6f55c0833f4::t_8a444ca732f798 69,72-75,102
+  s_58b6f55c0833f4::t_588928d223a90c 9,14-15,19,25,37,42,44,47-48,52-53,79,87-88,98,107
+cmd/kimiburn/validate.go
+  s_58b6f55c0833f4::t_ca5dc7ffd6cca0 28,31,35
+  s_58b6f55c0833f4::t_588928d223a90c 6,16,20
+internal/app/runway_integration_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 9,12,14,23,28-29,32,34-35,52,60
+cmd/kimiburn/dashboard.go
+  s_58b6f55c0833f4::t_588928d223a90c 13,17,32,36,42,60,62,88
+cmd/kimiburn/setup.go
+  s_58b6f55c0833f4::t_588928d223a90c 14,52,80
+internal/ui/format.go
+  s_58b6f55c0833f4::t_588928d223a90c 10,46,69,75,86,117
+README.md
+  s_58b6f55c0833f4::t_7431cecc556f0b 194-206
+internal/app/view_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 13,81,89
+internal/ui/demo.go
+  s_58b6f55c0833f4::t_588928d223a90c 7,14,22,24-26,28-30,34,42,46-47,53,60-61,63,65,79,81,86,96,102,110-112
+cmd/kimiburn/commands.go
+  s_58b6f55c0833f4::t_588928d223a90c 11,19,22,36,62-63,71,77,85,96-97,113,120,125,135
+  s_58b6f55c0833f4::t_5b53a35d959b81 23
+internal/app/model.go
+  s_58b6f55c0833f4::t_588928d223a90c 14,40,46,52,73-74,111-112,122,486,500-501,515
+cmd/kimiburn/main_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 12,121,123,150,162,165,179
+internal/ui/demo_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 8,17,21
+AGENTS.md
+  s_58b6f55c0833f4::t_955e8b604d1bf4 21-22,34-42
+internal/ui/dashboard_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 11,18,107
+cmd/kimiburn/main.go
+  s_58b6f55c0833f4::t_588928d223a90c 15,70,76,79,86,112,165
+internal/ui/trend_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 10,16,20,31,37,43-44,46-48,59,72,80,88
+cmd/kimiburn/dashboard_test.go
+  s_58b6f55c0833f4::t_588928d223a90c 14,45,48-49,58,113,121,139,141-142
+go.sum
+  s_58b6f55c0833f4::t_7fa690307e16e5 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "d04b6c7528fcb2dc104a4ef56b9e533dc7d00d2a",
+  "prompts": {},
+  "sessions": {
+    "s_58b6f55c0833f4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_de8e37bb1ffeg7g6B9LpPtCNn5",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "human_author": "Miguel Angel Acevedo <acevedomiguel@gmail.com>"
+    }
+  }
+}
