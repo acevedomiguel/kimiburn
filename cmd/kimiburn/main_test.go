@@ -214,3 +214,18 @@ func TestRunUnknownFlagIsUsageError(t *testing.T) {
 		t.Errorf("stderr missing usage reminder in:\n%s", stderr)
 	}
 }
+
+// The help output names the shared engine the binary embeds, so a support
+// report can identify it after the engine moved to its own module.
+func TestHelpReportsEngineVersion(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--help"}, strings.NewReader(""), &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit code = %d, want %d", code, exitOK)
+	}
+	if !strings.Contains(stdout.String(), "github.com/acevedomiguel/burnblocks") {
+		t.Errorf("help must name the engine module:\n%s", stdout.String())
+	}
+	if got := engineVersion(); got == "" {
+		t.Error("engineVersion must never be empty")
+	}
+}
