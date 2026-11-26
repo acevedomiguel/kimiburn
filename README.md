@@ -191,46 +191,19 @@ never cross reset: `Beyond this reset` has no exhaustion timestamp. Missing
 resets, invalid ratios, and conflicting sources produce explicit unavailable
 reasons.
 
-## Use as a library
+## Built on Burn Blocks
 
-Go 1.26.0 or newer can import the headless API directly:
+KimiBurn is the terminal UI. The read-only Kimi Code usage engine it runs on —
+the bounded `GET /usages` client, quota normalization, runway estimation, cache,
+configuration, and credential resolution — lives in
+[Burn Blocks](https://github.com/acevedomiguel/burnblocks) as the
+`github.com/acevedomiguel/burnblocks/kimi` package.
 
-```sh
-go get github.com/acevedomiguel/kimiburn
-```
-
-```go
-source, err := kimiburn.NewSource(kimiburn.DefaultBaseURL, token)
-if err != nil {
-	return err
-}
-state := kimiburn.EmptyStoredState()
-snapshot, err := kimiburn.Fetch(context.Background(), source, &state)
-if err != nil {
-	return err
-}
-return kimiburn.WriteJSON(writer, snapshot, kimiburn.JSONOptions{
-	APIBase: kimiburn.DefaultBaseURL,
-	Now:     time.Now(),
-})
-```
-
-Import `github.com/acevedomiguel/kimiburn` as `kimiburn`; `token` and `writer`
-are supplied by the caller. Reuse `state` across reads to retain local runway
-history. Passing nil state to `Fetch` uses an ephemeral cold start instead.
-`WithHTTPClient` and `WithClock` inject network and time dependencies for
-callers and tests.
-
-The library never reads environment credentials, keyrings, configuration files,
-or caches implicitly, and never selects stdout or stderr itself. Raw provider
-JSON and caller-owned state can contain private account data; keep them out of
-logs and fixtures. The interactive terminal model and credential/cache stores
-remain internal.
-
-The Go API follows semantic versioning. Releases from the current unsuffixed
-module path stay on `v1.x.y`; a breaking change requires a coordinated
-`/v2` module-path migration before any `v2` tag. Release automation rejects a
-tag whose major version does not match `go.mod`.
+KimiBurn imports that package and adds the Bubble Tea dashboard, the `--json`
+output, and the `setup`/`logout` commands. The provider contract and the runway
+mathematics are documented in [Burn Blocks](https://github.com/acevedomiguel/burnblocks).
+This repository no longer publishes a public Go library of its own; its module
+path follows the binary's `v1.x.y` releases.
 
 ## Configuration
 

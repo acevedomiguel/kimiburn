@@ -7,7 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // DashboardOptions controls one pure dashboard frame.
@@ -21,10 +21,10 @@ type DashboardOptions struct {
 	Scroll        int
 
 	// History holds the retained local samples per quota, drawn as trends.
-	History map[domain.QuotaKey][]domain.Sample
+	History map[kimi.QuotaKey][]kimi.Sample
 	// Meters holds the remaining fraction each meter currently displays while
 	// it animates towards the reading. A missing key draws the reading itself.
-	Meters map[domain.QuotaKey]float64
+	Meters map[kimi.QuotaKey]float64
 	// Refreshing marks a request in flight; Spinner is its current frame.
 	Refreshing bool
 	Spinner    string
@@ -36,7 +36,7 @@ type DashboardOptions struct {
 
 // BuildDashboardBody renders normalized quota panels in priority order.
 // Raw provider JSON is available through --json, not the interactive dashboard.
-func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []string {
+func BuildDashboardBody(snapshot kimi.Snapshot, opts DashboardOptions) []string {
 	layout := Classify(opts.Width, opts.Height)
 	if layout.Class == ClassTooSmall {
 		return []string{TooSmallMessage}
@@ -48,7 +48,7 @@ func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []strin
 	leftWidth := (width - 1) / 2
 	rightWidth := width - 1 - leftWidth
 
-	panelFor := func(title string, key domain.QuotaKey, caption string, w int, allocation bool) []string {
+	panelFor := func(title string, key kimi.QuotaKey, caption string, w int, allocation bool) []string {
 		quota, ok := snapshot.Quotas[key]
 		return quotaPanel(panelSpec{
 			title: title, key: key, quota: quota, ok: ok, runway: snapshot.Runways[key],
@@ -57,29 +57,29 @@ func BuildDashboardBody(snapshot domain.Snapshot, opts DashboardOptions) []strin
 	}
 
 	top := lipgloss.JoinHorizontal(lipgloss.Top,
-		block(panelFor("5-hour quota", domain.QuotaLimit5h, "", leftWidth, false)),
+		block(panelFor("5-hour quota", kimi.QuotaLimit5h, "", leftWidth, false)),
 		" ",
-		block(panelFor("Monthly membership", domain.QuotaLimitMonthTotal, FreshnessCaption(snapshot, opts.Cached, opts.Now), rightWidth, false)),
+		block(panelFor("Monthly membership", kimi.QuotaLimitMonthTotal, FreshnessCaption(snapshot, opts.Cached, opts.Now), rightWidth, false)),
 	)
 	lines := strings.Split(top, "\n")
 
-	_, codeOK := snapshot.Quotas[domain.QuotaLimitMonthCode]
-	_, legacyOK := snapshot.Quotas[domain.QuotaLimit7d]
+	_, codeOK := snapshot.Quotas[kimi.QuotaLimitMonthCode]
+	_, legacyOK := snapshot.Quotas[kimi.QuotaLimit7d]
 	if legacyOK && codeOK && width >= 120 {
 		row := lipgloss.JoinHorizontal(lipgloss.Top,
-			block(panelFor("Monthly Code allocation", domain.QuotaLimitMonthCode, "", leftWidth, true)),
+			block(panelFor("Monthly Code allocation", kimi.QuotaLimitMonthCode, "", leftWidth, true)),
 			" ",
-			block(panelFor("7-day quota · legacy", domain.QuotaLimit7d, "", rightWidth, false)),
+			block(panelFor("7-day quota · legacy", kimi.QuotaLimit7d, "", rightWidth, false)),
 		)
 		lines = append(lines, strings.Split(row, "\n")...)
 	} else {
 		// Code allocation keeps the same half width as the panel above it, so the
 		// left column lines up at every terminal size.
 		if codeOK {
-			lines = append(lines, panelFor("Monthly Code allocation", domain.QuotaLimitMonthCode, "", leftWidth, true)...)
+			lines = append(lines, panelFor("Monthly Code allocation", kimi.QuotaLimitMonthCode, "", leftWidth, true)...)
 		}
 		if legacyOK {
-			lines = append(lines, panelFor("7-day quota · legacy", domain.QuotaLimit7d, "", width, false)...)
+			lines = append(lines, panelFor("7-day quota · legacy", kimi.QuotaLimit7d, "", width, false)...)
 		}
 	}
 
@@ -119,7 +119,7 @@ func formatCountdown(d time.Duration) string {
 
 // RenderDashboard returns an exact-height frame with the footer on the last
 // row. Body scrolling never changes the reading's timestamp.
-func RenderDashboard(snapshot domain.Snapshot, opts DashboardOptions) string {
+func RenderDashboard(snapshot kimi.Snapshot, opts DashboardOptions) string {
 	layout := Classify(opts.Width, opts.Height)
 	if layout.Class == ClassTooSmall {
 		return renderTooSmall(opts)
@@ -160,12 +160,12 @@ func RenderDashboard(snapshot domain.Snapshot, opts DashboardOptions) string {
 }
 
 // DashboardWarning picks the single warning shown under the title.
-func DashboardWarning(snapshot domain.Snapshot, warning string) string {
+func DashboardWarning(snapshot kimi.Snapshot, warning string) string {
 	if warning == "" && len(snapshot.Warnings) > 0 {
 		warning = snapshot.Warnings[0].Section + ": " + snapshot.Warnings[0].Message
 	}
-	if _, month := snapshot.Quotas[domain.QuotaLimitMonthTotal]; !month {
-		if _, code := snapshot.Quotas[domain.QuotaLimitMonthCode]; !code && warning == "" {
+	if _, month := snapshot.Quotas[kimi.QuotaLimitMonthTotal]; !month {
+		if _, code := snapshot.Quotas[kimi.QuotaLimitMonthCode]; !code && warning == "" {
 			warning = "Parser: monthly quota data was not reported by this account/API response"
 		}
 	}
@@ -210,10 +210,10 @@ func Footer(opts DashboardOptions) string {
 
 type panelSpec struct {
 	title      string
-	key        domain.QuotaKey
-	quota      domain.QuotaReading
+	key        kimi.QuotaKey
+	quota      kimi.QuotaReading
 	ok         bool
-	runway     domain.RunwayEstimate
+	runway     kimi.RunwayEstimate
 	caption    string
 	width      int
 	allocation bool
@@ -294,11 +294,11 @@ func itoa(v int) string {
 // currentPeriod keeps only the samples that belong to the quota's current reset
 // period, so a cached history from before a reset never draws as this period's
 // trend.
-func currentPeriod(samples []domain.Sample, reset *time.Time) []domain.Sample {
+func currentPeriod(samples []kimi.Sample, reset *time.Time) []kimi.Sample {
 	if reset == nil {
 		return nil
 	}
-	out := make([]domain.Sample, 0, len(samples))
+	out := make([]kimi.Sample, 0, len(samples))
 	for _, sample := range samples {
 		if sample.ResetAt.Equal(*reset) {
 			out = append(out, sample)

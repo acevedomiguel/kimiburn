@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/ui"
 )
 
@@ -37,19 +37,19 @@ type RefreshRequest struct {
 type RefreshResult struct {
 	Generation  uint64
 	Manual      bool
-	Snapshot    domain.Snapshot
+	Snapshot    kimi.Snapshot
 	Err         error
 	AuthFailure bool
 	NextAllowed time.Time
 	// History is a copy of the retained local samples after this reading; nil
 	// leaves the displayed history unchanged.
-	History map[domain.QuotaKey][]domain.Sample
+	History map[kimi.QuotaKey][]kimi.Sample
 }
 
 type RefreshFunc func(context.Context, RefreshRequest) RefreshResult
 
 type CacheResult struct {
-	Snapshot domain.Snapshot
+	Snapshot kimi.Snapshot
 	Err      error
 }
 
@@ -70,8 +70,8 @@ type Options struct {
 	Configured  func() (bool, error)
 	Refresh     RefreshFunc
 	Demo        bool
-	Snapshot    domain.Snapshot
-	History     map[domain.QuotaKey][]domain.Sample
+	Snapshot    kimi.Snapshot
+	History     map[kimi.QuotaKey][]kimi.Sample
 	Width       int
 	Height      int
 	NoColor     bool
@@ -108,8 +108,8 @@ type Options struct {
 // Model is the complete Bubble Tea state for one Kimiburn process.
 type Model struct {
 	state         viewState
-	snapshot      domain.Snapshot
-	history       map[domain.QuotaKey][]domain.Sample
+	snapshot      kimi.Snapshot
+	history       map[kimi.QuotaKey][]kimi.Sample
 	cached        bool
 	width         int
 	height        int
@@ -119,7 +119,7 @@ type Model struct {
 	keys          ui.KeyMap
 	helpKeys      ui.HelpKeyMap
 	spinner       spinner.Model
-	meters        map[domain.QuotaKey]meter
+	meters        map[kimi.QuotaKey]meter
 	meterGen      uint64
 	scroll        int
 	savedState    viewState
@@ -483,7 +483,7 @@ func (m Model) fiveHour() (float64, bool) {
 	if m.state != ViewReady && m.state != ViewHelp {
 		return 0, false
 	}
-	quota, ok := m.snapshot.Quotas[domain.QuotaLimit5h]
+	quota, ok := m.snapshot.Quotas[kimi.QuotaLimit5h]
 	if !ok || quota.UsedRatio == nil || *quota.UsedRatio < 0 || *quota.UsedRatio > 1 {
 		return 0, false
 	}
@@ -497,8 +497,8 @@ func (m Model) windowTitle() string {
 		return "kimiburn"
 	}
 	title := "kimiburn · 5h " + ui.FormatPercent(&remaining) + " left"
-	if runway := m.snapshot.Runways[domain.QuotaLimit5h]; runway.Status == "finite" {
-		title += " · runway " + ui.FormatRunway(runway, domain.QuotaLimit5h)
+	if runway := m.snapshot.Runways[kimi.QuotaLimit5h]; runway.Status == "finite" {
+		title += " · runway " + ui.FormatRunway(runway, kimi.QuotaLimit5h)
 	}
 	return title
 }
@@ -512,7 +512,7 @@ func (m Model) terminalProgress() *tea.ProgressBar {
 		return tea.NewProgressBar(tea.ProgressBarNone, 0)
 	}
 	state := tea.ProgressBarDefault
-	switch status := m.snapshot.Runways[domain.QuotaLimit5h].Status; {
+	switch status := m.snapshot.Runways[kimi.QuotaLimit5h].Status; {
 	case status == "depleted" || remaining <= 0:
 		state = tea.ProgressBarError
 	case status == "finite" || remaining < 0.2:

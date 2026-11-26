@@ -12,11 +12,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/acevedomiguel/burnblocks/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/app"
-	"github.com/acevedomiguel/kimiburn/internal/cache"
-	"github.com/acevedomiguel/kimiburn/internal/config"
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
-	"github.com/acevedomiguel/kimiburn/internal/domain"
 )
 
 // version is overridden at release time via -ldflags "-X main.version=...".
@@ -70,23 +67,23 @@ type deps struct {
 	// line. Tests inject validate directly and leave this nil.
 	validateFactory func(configPath string) func(context.Context, string) error
 	// keyring is the OS secret store, or nil to force the file fallback.
-	keyring credentials.Keyring
+	keyring kimi.Keyring
 	// interactive reports whether stdin is a terminal.
 	interactive func(io.Reader) bool
 	// readSecret reads a secret without echoing it.
 	readSecret func(prompt string, stdin io.Reader, stdout io.Writer) (string, error)
 	// newUsage builds the one-shot provider reader. Tests inject a fake.
-	newUsage func(baseURL, token string) (domain.UsageSource, error)
+	newUsage func(baseURL, token string) (kimi.UsageSource, error)
 	// stateStore overrides the cache for tests. nil selects the real file store,
 	// or the disabled store when --no-cache is set.
-	stateStore cache.StateStore
+	stateStore kimi.StateStore
 	// now supplies cached-age timestamps in tests.
 	now func() time.Time
 	// runDashboard runs the alternate-screen program; tests drive the model
 	// directly without a terminal.
 	runDashboard func(app.Model, io.Reader, io.Writer) error
 	// setup runs interactive token setup when the root command finds no token.
-	setup func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int
+	setup func(kimi.Paths, options, io.Reader, io.Writer, io.Writer, deps) int
 }
 
 // runWithDeps is the testable entry point.
@@ -112,7 +109,7 @@ func runWithDeps(args []string, stdin io.Reader, stdout, stderr io.Writer, d dep
 	case "demo":
 	}
 
-	paths, err := config.DefaultPaths()
+	paths, err := kimi.DefaultPaths()
 	if err != nil {
 		fmt.Fprintf(stderr, "kimiburn: %s\n", earlyRedact(err.Error()))
 		return exitFailure
@@ -165,7 +162,7 @@ func parse(args []string) (options, error) {
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.StringVar(&opts.configPath, "config", "", "use an explicit configuration file")
 	fs.BoolVar(&opts.jsonOutput, "json", false, "emit one schema-1 JSON snapshot")
-	fs.DurationVar(&opts.refreshInterval, "refresh", config.DefaultRefreshInterval, "automatic refresh interval (0 disables; otherwise at least 10s)")
+	fs.DurationVar(&opts.refreshInterval, "refresh", kimi.DefaultRefreshInterval, "automatic refresh interval (0 disables; otherwise at least 10s)")
 	fs.BoolVar(&opts.noCache, "no-cache", false, "disable cache reads and writes")
 	fs.BoolVar(&opts.noColor, "no-color", false, "disable terminal color")
 	if err := fs.Parse(args); err != nil {

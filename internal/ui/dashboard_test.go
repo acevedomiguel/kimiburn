@@ -8,14 +8,14 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 func TestDashboardBodyShowsCoreFactsWithoutRawAdditionalData(t *testing.T) {
 	snapshot := SyntheticLegacySnapshot()
-	snapshot.Quotas[domain.QuotaLimitMonthCode] = domain.QuotaReading{UsedRatio: floatPointer(0.2)}
+	snapshot.Quotas[kimi.QuotaLimitMonthCode] = kimi.QuotaReading{UsedRatio: floatPointer(0.2)}
 	body := strings.Join(BuildDashboardBody(snapshot, DashboardOptions{Width: 100, Height: 40, Now: snapshot.GeneratedAt.Add(time.Minute), Styles: NewStyles(false)}), "\n")
 	for _, want := range []string{
 		"Monthly membership", "5-hour quota", "Monthly Code allocation", "7-day quota · legacy",
@@ -104,7 +104,7 @@ func TestMonthlyCodeAllocationKeepsHalfWidth(t *testing.T) {
 		if tc.legacy {
 			snapshot = SyntheticLegacySnapshot()
 		}
-		snapshot.Quotas[domain.QuotaLimitMonthCode] = domain.QuotaReading{UsedRatio: floatPointer(0.2)}
+		snapshot.Quotas[kimi.QuotaLimitMonthCode] = kimi.QuotaReading{UsedRatio: floatPointer(0.2)}
 		body := BuildDashboardBody(snapshot, DashboardOptions{Width: tc.width, Height: 40, Now: snapshot.GeneratedAt, Styles: NewStyles(false)})
 
 		// leftWidth is the width of the 5-hour quota panel, which now occupies

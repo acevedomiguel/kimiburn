@@ -4,6 +4,12 @@ Kimiburn is an independent, read-only client. It is not affiliated with Kimi.
 This document describes compatibility with behavior observed in official Kimi
 clients; it is not a stable public API specification.
 
+The calling implementation — the bounded client, tolerant modern/legacy
+decoding, and schema-1 projection — now lives in
+[Burn Blocks](https://github.com/acevedomiguel/burnblocks) as
+`github.com/acevedomiguel/burnblocks/kimi`. This document remains here as the
+provider-compatibility record that implementation follows.
+
 ## Endpoint and authentication
 
 Kimiburn calls `GET {base}/usages` with the configured Kimi Code bearer token.

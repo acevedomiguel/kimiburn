@@ -9,7 +9,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
+	"github.com/acevedomiguel/burnblocks/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/ui"
 )
 
@@ -198,7 +198,7 @@ func (m Model) chooseInterval(idx int) (tea.Model, tea.Cmd) {
 	}
 	switch {
 	case err != nil:
-		m.settingsMsg = "Applied for this session; could not save: " + credentials.Redact(err.Error())
+		m.settingsMsg = "Applied for this session; could not save: " + kimi.Redact(err.Error())
 		m.settingsErr = true
 	case m.intervalPinned:
 		m.settingsMsg = "Applied. The external override still wins on restart."
@@ -230,7 +230,7 @@ func (m Model) submitToken() (tea.Model, tea.Cmd) {
 	m.settingsMsg, m.settingsErr = "Checking the token…", false
 
 	validate, save := m.validateToken, m.saveToken
-	redactor := credentials.NewRedactor(token)
+	redactor := kimi.NewRedactor(token)
 	return m, func() tea.Msg {
 		validateCtx, cancelValidate := context.WithTimeout(context.Background(), tokenUpdateTimeout)
 		err := validate(validateCtx, token)

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 func TestSyntheticSnapshotsAreDeterministicAndSelfContained(t *testing.T) {
@@ -14,11 +14,11 @@ func TestSyntheticSnapshotsAreDeterministicAndSelfContained(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("demo snapshot is not deterministic")
 	}
-	if first.GeneratedAt.IsZero() || first.Quotas[domain.QuotaLimitMonthTotal].UsedRatio == nil || first.Quotas[domain.QuotaLimit5h].UsedRatio == nil {
+	if first.GeneratedAt.IsZero() || first.Quotas[kimi.QuotaLimitMonthTotal].UsedRatio == nil || first.Quotas[kimi.QuotaLimit5h].UsedRatio == nil {
 		t.Fatalf("modern demo incomplete: %+v", first)
 	}
 	legacy := SyntheticLegacySnapshot()
-	quota := legacy.Quotas[domain.QuotaLimit7d]
+	quota := legacy.Quotas[kimi.QuotaLimit7d]
 	if quota.Used == nil || quota.Limit == nil || quota.Remaining == nil {
 		t.Fatalf("legacy counts missing: %+v", quota)
 	}

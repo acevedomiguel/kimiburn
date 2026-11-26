@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 func TestFormattingDistinguishesZeroMissingAndUnavailable(t *testing.T) {
@@ -21,8 +21,8 @@ func TestFormattingDistinguishesZeroMissingAndUnavailable(t *testing.T) {
 	if got := FormatCount(nil); got != "Not reported" {
 		t.Errorf("missing count=%q", got)
 	}
-	runway := domain.RunwayEstimate{Status: "depleted", Confidence: "unavailable"}
-	if got := FormatRunway(runway, domain.QuotaLimit5h); got != "Depleted" {
+	runway := kimi.RunwayEstimate{Status: "depleted", Confidence: "unavailable"}
+	if got := FormatRunway(runway, kimi.QuotaLimit5h); got != "Depleted" {
 		t.Errorf("depleted=%q", got)
 	}
 }
@@ -31,7 +31,7 @@ func TestLiveCaptionUsesReadingLocalTimezone(t *testing.T) {
 	generated := time.Date(2026, 11, 24, 14, 32, 30, 0, time.UTC)
 	location := time.FixedZone("EST", -5*60*60)
 	now := generated.In(location)
-	got := FreshnessCaption(domain.Snapshot{GeneratedAt: generated}, false, now)
+	got := FreshnessCaption(kimi.Snapshot{GeneratedAt: generated}, false, now)
 	if got != "Live · 09:32:30 EST" {
 		t.Fatalf("live caption=%q, want local timezone", got)
 	}
@@ -51,23 +51,23 @@ func TestResetAndRunwayFormatting(t *testing.T) {
 		t.Errorf("missing reset=%q", got)
 	}
 	seconds := 8400.0
-	finite := domain.RunwayEstimate{Status: "finite", Seconds: &seconds, Confidence: "medium"}
-	if got := FormatRunway(finite, domain.QuotaLimit5h); got != "2h 20m" {
+	finite := kimi.RunwayEstimate{Status: "finite", Seconds: &seconds, Confidence: "medium"}
+	if got := FormatRunway(finite, kimi.QuotaLimit5h); got != "2h 20m" {
 		t.Errorf("finite=%q", got)
 	}
 	seconds = 274800.0
 	finite.Seconds = &seconds
-	if got := FormatRunway(finite, domain.QuotaLimit5h); got != "3d 4h" {
+	if got := FormatRunway(finite, kimi.QuotaLimit5h); got != "3d 4h" {
 		t.Errorf("long finite=%q", got)
 	}
 	burn := 0.00003333333333333333
 	finite.BurnRatioPerSecond = &burn
-	if got := FormatBurn(finite, domain.QuotaLimit5h); got != "12.0%/h" {
+	if got := FormatBurn(finite, kimi.QuotaLimit5h); got != "12.0%/h" {
 		t.Errorf("hour burn=%q", got)
 	}
 	burn = 0.00000010392857142857143
 	finite.BurnRatioPerSecond = &burn
-	if got := FormatBurn(finite, domain.QuotaLimitMonthTotal); got != "0.90%/day" {
+	if got := FormatBurn(finite, kimi.QuotaLimitMonthTotal); got != "0.90%/day" {
 		t.Errorf("day burn=%q", got)
 	}
 }

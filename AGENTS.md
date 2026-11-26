@@ -18,7 +18,8 @@ Go/Charm patterns, but no Routeburn or OpenRouter domain concept carries over.
 - Credentials and authorization headers are never exposed in any output,
   including logs, errors, JSON, cache, UI, tests, fixtures, or commits; they are
   stored only where the credential rules above allow. Route user-visible errors
-  through `internal/credentials/redact.go`.
+  through the redaction helper in `burnblocks/kimi` (`kimi.Redact`,
+  `kimi.NewRedactor`).
 - Real account data is permitted only in the intended private local surfaces:
   the UI, `--json` output, and the local cache. Never put real account data in
   logs, errors, tests, fixtures, commits, or probe reports.
@@ -30,12 +31,15 @@ Go/Charm patterns, but no Routeburn or OpenRouter domain concept carries over.
 ## Architecture boundaries
 
 - Module `github.com/acevedomiguel/kimiburn`, binary built from `./cmd/kimiburn`.
-- The module-root package is the supported public Go facade. Callers supply the
-  token, HTTP/time dependencies, writers, and optional in-memory state; the
-  facade never reads env credentials, keyrings, config files, or caches
-  implicitly. Everything under `internal/` remains private.
-- `internal/app` and `internal/domain` must not import `internal/kimi`. The wire
-  client maps responses into provider-neutral domain types behind `UsageSource`.
+- KimiBurn is the terminal UI and CLI only. The provider engine — the bounded
+  `GET /usages` client, quota normalization, runway estimation, cache,
+  configuration, and credential resolution — lives in
+  `github.com/acevedomiguel/burnblocks/kimi`. Do not reintroduce a local copy of
+  any of it, and do not publish a public Go library from this module.
+- `internal/ui` renders pure frames and never fetches. `internal/app` holds the
+  Bubble Tea state machine, scheduling, process-lifetime runway history, and
+  injected clocks. `cmd/kimiburn` wires the engine in and owns `setup`,
+  `logout`, `config`, the dashboard, and `--json`.
 - Preserve missing-versus-zero: optional values stay pointers/null, never a
   fabricated `0`. Missing data is not zero, and an unavailable forecast is not
   infinite.

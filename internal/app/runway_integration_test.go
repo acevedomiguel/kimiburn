@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
-type usageSourceFunc func(context.Context) (domain.UsageReading, error)
+type usageSourceFunc func(context.Context) (kimi.UsageReading, error)
 
-func (f usageSourceFunc) ReadUsage(ctx context.Context) (domain.UsageReading, error) {
+func (f usageSourceFunc) ReadUsage(ctx context.Context) (kimi.UsageReading, error) {
 	return f(ctx)
 }
 func (f usageSourceFunc) NextRefreshAllowedAt() time.Time { return time.Time{} }
@@ -20,19 +20,19 @@ func TestLiveRunwayHistoryPersistsAndNoCacheStaysInMemory(t *testing.T) {
 	for _, noCache := range []bool{false, true} {
 		t.Run(map[bool]string{false: "persistent", true: "memory"}[noCache], func(t *testing.T) {
 			start := time.Date(2026, 11, 24, 16, 0, 0, 0, time.UTC)
-			store := &memoryStateStore{state: domain.EmptyStoredState()}
+			store := &memoryStateStore{state: kimi.EmptyStoredState()}
 			calls := 0
 			opts, cancel, err := NewLiveModelOptions(LiveOptions{
 				Store: store, NoCache: noCache,
 				ResolveToken: func(context.Context) (string, error) { return "token", nil },
-				NewUsage: func(string, string) (domain.UsageSource, error) {
-					return usageSourceFunc(func(context.Context) (domain.UsageReading, error) {
+				NewUsage: func(string, string) (kimi.UsageSource, error) {
+					return usageSourceFunc(func(context.Context) (kimi.UsageReading, error) {
 						observed := start.Add(time.Duration(calls) * 30 * time.Second)
 						calls++
-						return domain.UsageReading{
+						return kimi.UsageReading{
 							ObservedAt: observed, Raw: json.RawMessage(`{}`),
-							Quotas: map[domain.QuotaKey]domain.QuotaReading{
-								domain.QuotaLimit5h: {Source: "limit_5h", UsedRatio: ratioPointer(.2 + float64(calls-1)*.01), ResetAt: timePointer(start.Add(2 * time.Hour))},
+							Quotas: map[kimi.QuotaKey]kimi.QuotaReading{
+								kimi.QuotaLimit5h: {Source: "limit_5h", UsedRatio: ratioPointer(.2 + float64(calls-1)*.01), ResetAt: timePointer(start.Add(2 * time.Hour))},
 							},
 						}, nil
 					}), nil
@@ -49,7 +49,7 @@ func TestLiveRunwayHistoryPersistsAndNoCacheStaysInMemory(t *testing.T) {
 					t.Fatal(result.Err)
 				}
 			}
-			estimate := result.Snapshot.Runways[domain.QuotaLimit5h]
+			estimate := result.Snapshot.Runways[kimi.QuotaLimit5h]
 			if estimate.Status != "finite" || estimate.SampleCount != 5 || estimate.WindowSeconds != 120 || estimate.Confidence != "low" {
 				t.Fatalf("runway=%+v", estimate)
 			}
@@ -57,7 +57,7 @@ func TestLiveRunwayHistoryPersistsAndNoCacheStaysInMemory(t *testing.T) {
 				if store.loads != 0 || store.saves != 0 {
 					t.Fatalf("no-cache I/O: loads=%d saves=%d", store.loads, store.saves)
 				}
-			} else if store.saves != 5 || len(store.savedState.Samples[domain.QuotaLimit5h]) != 5 {
+			} else if store.saves != 5 || len(store.savedState.Samples[kimi.QuotaLimit5h]) != 5 {
 				t.Fatalf("saved samples=%+v saves=%d", store.savedState.Samples, store.saves)
 			}
 		})

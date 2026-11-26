@@ -10,13 +10,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/acevedomiguel/burnblocks/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/app"
-	"github.com/acevedomiguel/kimiburn/internal/cache"
-	"github.com/acevedomiguel/kimiburn/internal/config"
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
 )
 
-func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stderr io.Writer, d deps) int {
+func doDashboard(paths kimi.Paths, opts options, stdin io.Reader, stdout, stderr io.Writer, d deps) int {
 	noColor := opts.noColor
 	if opts.command == "demo" {
 		model := app.NewModel(app.Options{Demo: true, NoColor: noColor, Now: d.now, TerminalProgress: terminalProgressSupported(os.Getenv)})
@@ -31,17 +29,17 @@ func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stde
 		return exitOK
 	}
 
-	overrides := config.Overrides{NoColor: opts.noColor}
+	overrides := kimi.Overrides{NoColor: opts.noColor}
 	if opts.refreshSet {
 		overrides.RefreshInterval = &opts.refreshInterval
 	}
-	cfg, err := config.Load(configPathsFor(paths, opts), environment(), overrides)
+	cfg, err := kimi.LoadConfig(configPathsFor(paths, opts), environment(), overrides)
 	if err != nil {
 		fmt.Fprintf(stderr, "kimiburn: %s\n", earlyRedact(err.Error()))
 		return exitUsage
 	}
 	noColor = noColor || cfg.Color == "never"
-	credentialStore := credentials.NewStore(credentials.Options{Keyring: d.keyring, TokenFile: paths.TokenFile(), KeyringEnabled: cfg.Keyring})
+	credentialStore := kimi.NewTokenStore(kimi.TokenStoreOptions{Keyring: d.keyring, TokenFile: paths.TokenFile(), KeyringEnabled: cfg.Keyring})
 	token, err := credentialStore.Resolve(context.Background())
 	if err != nil {
 		fmt.Fprintf(stderr, "kimiburn: could not read credentials: %s\n", earlyRedact(err.Error()))
@@ -59,9 +57,9 @@ func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stde
 	stateStore := d.stateStore
 	if stateStore == nil {
 		if opts.noCache {
-			stateStore = cache.NewDisabledStore()
+			stateStore = kimi.NewDisabledStateStore()
 		} else {
-			stateStore = cache.NewStore(paths.CacheFile)
+			stateStore = kimi.NewStateStore(paths.CacheFile)
 		}
 	}
 	modelOptions, cancel, err := app.NewLiveModelOptions(app.LiveOptions{
@@ -87,7 +85,7 @@ func doDashboard(paths config.Paths, opts options, stdin io.Reader, stdout, stde
 	}
 	modelOptions.IntervalOptions = app.DefaultIntervalOptions()
 	modelOptions.SetInterval = func(interval time.Duration) error {
-		return config.SaveRefreshInterval(configTarget, interval)
+		return kimi.SaveRefreshInterval(configTarget, interval)
 	}
 	modelOptions.IntervalPinned = opts.refreshSet || strings.TrimSpace(os.Getenv("KIMIBURN_REFRESH_INTERVAL")) != ""
 	modelOptions.EnvToken = credentialStore.EnvironmentToken() != ""

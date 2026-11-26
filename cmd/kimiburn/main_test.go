@@ -9,11 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acevedomiguel/burnblocks/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/app"
-	"github.com/acevedomiguel/kimiburn/internal/config"
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
-	"github.com/acevedomiguel/kimiburn/internal/domain"
-	"github.com/acevedomiguel/kimiburn/internal/kimi"
 )
 
 // errorReader fails on any read, so a CLI path that prompts or consumes stdin
@@ -121,9 +118,9 @@ func TestRunWithoutTokenRunsSetupThenDashboard(t *testing.T) {
 	d := defaultDeps()
 	d.keyring = nil
 	setupCalls := 0
-	d.setup = func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int {
+	d.setup = func(kimi.Paths, options, io.Reader, io.Writer, io.Writer, deps) int {
 		setupCalls++
-		t.Setenv(credentials.EnvToken, "test-token")
+		t.Setenv(kimi.TokenEnvVar, "test-token")
 		return exitOK
 	}
 	d.runDashboard = func(model app.Model, _ io.Reader, _ io.Writer) error {
@@ -150,7 +147,7 @@ func TestRunDoesNotStartDashboardWhenAutomaticSetupFails(t *testing.T) {
 	var out, errOut bytes.Buffer
 	d := defaultDeps()
 	d.keyring = nil
-	d.setup = func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int { return exitFailure }
+	d.setup = func(kimi.Paths, options, io.Reader, io.Writer, io.Writer, deps) int { return exitFailure }
 	d.runDashboard = func(app.Model, io.Reader, io.Writer) error {
 		t.Fatal("dashboard started after setup failed")
 		return nil
@@ -162,10 +159,10 @@ func TestRunDoesNotStartDashboardWhenAutomaticSetupFails(t *testing.T) {
 
 func TestRunWithTokenSkipsAutomaticSetup(t *testing.T) {
 	isolatedEnv(t)
-	t.Setenv(credentials.EnvToken, "already-configured")
+	t.Setenv(kimi.TokenEnvVar, "already-configured")
 	var out, errOut bytes.Buffer
 	d := defaultDeps()
-	d.setup = func(config.Paths, options, io.Reader, io.Writer, io.Writer, deps) int {
+	d.setup = func(kimi.Paths, options, io.Reader, io.Writer, io.Writer, deps) int {
 		t.Fatal("setup ran despite an existing token")
 		return exitFailure
 	}
@@ -179,7 +176,7 @@ func TestDemoRunsSyntheticDashboardWithoutProvider(t *testing.T) {
 	isolatedEnv(t)
 	var out, errOut bytes.Buffer
 	d := defaultDeps()
-	d.newUsage = func(string, string) (domain.UsageSource, error) {
+	d.newUsage = func(string, string) (kimi.UsageSource, error) {
 		t.Fatal("demo constructed provider")
 		return nil, nil
 	}

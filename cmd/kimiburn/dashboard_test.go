@@ -11,9 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/acevedomiguel/burnblocks/kimi"
 	"github.com/acevedomiguel/kimiburn/internal/app"
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
-	"github.com/acevedomiguel/kimiburn/internal/domain"
 )
 
 // readyDashboard runs the CLI with a dashboard stub, then drives the captured
@@ -43,11 +42,11 @@ func readyDashboard(t *testing.T, args []string, d deps) (app.Model, string) {
 
 // settingsDeps wires a fake keyring, cache, and provider so no test touches the
 // network or real user state.
-func settingsDeps(kr credentials.Keyring, source domain.UsageSource, now time.Time, validate func(context.Context, string) error) deps {
+func settingsDeps(kr kimi.Keyring, source kimi.UsageSource, now time.Time, validate func(context.Context, string) error) deps {
 	d := defaultDeps()
 	d.keyring = kr
-	d.stateStore = &memoryStateStore{state: domain.EmptyStoredState()}
-	d.newUsage = func(string, string) (domain.UsageSource, error) { return source, nil }
+	d.stateStore = &memoryStateStore{state: kimi.EmptyStoredState()}
+	d.newUsage = func(string, string) (kimi.UsageSource, error) { return source, nil }
 	d.validate = validate
 	d.now = func() time.Time { return now }
 	return d
@@ -56,7 +55,7 @@ func settingsDeps(kr credentials.Keyring, source domain.UsageSource, now time.Ti
 func TestDashboardSettingsPersistIntervalAndStoreToken(t *testing.T) {
 	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.UTC)
 	kr := newCLIKeyring()
-	if err := kr.Set(credentials.ServiceName, credentials.AccountName, "existing-token"); err != nil {
+	if err := kr.Set(kimi.KeyringService, kimi.KeyringAccount, "existing-token"); err != nil {
 		t.Fatal(err)
 	}
 	var validated string
@@ -111,7 +110,7 @@ func TestDashboardSettingsPersistIntervalAndStoreToken(t *testing.T) {
 	if validated != replacement {
 		t.Errorf("validated = %q, want the replacement", validated)
 	}
-	if got := kr.values[credentials.ServiceName+"/"+credentials.AccountName]; got != replacement {
+	if got := kr.values[kimi.KeyringService+"/"+kimi.KeyringAccount]; got != replacement {
 		t.Errorf("keyring = %q, want the replacement token", got)
 	}
 }
@@ -119,7 +118,7 @@ func TestDashboardSettingsPersistIntervalAndStoreToken(t *testing.T) {
 func TestDashboardSettingsFlagsExternalIntervalOverride(t *testing.T) {
 	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.UTC)
 	kr := newCLIKeyring()
-	if err := kr.Set(credentials.ServiceName, credentials.AccountName, "existing-token"); err != nil {
+	if err := kr.Set(kimi.KeyringService, kimi.KeyringAccount, "existing-token"); err != nil {
 		t.Fatal(err)
 	}
 	d := settingsDeps(kr, &fakeUsageSource{reading: syntheticReading(now)}, now, func(context.Context, string) error { return nil })
@@ -137,10 +136,10 @@ func TestDashboardSettingsFlagsExternalIntervalOverride(t *testing.T) {
 func TestDashboardSettingsEnvironmentTokenIsExplained(t *testing.T) {
 	now := time.Date(2026, 11, 24, 14, 0, 0, 0, time.UTC)
 	setupEnv(t)
-	t.Setenv(credentials.EnvToken, "env-synthetic-token")
+	t.Setenv(kimi.TokenEnvVar, "env-synthetic-token")
 	d := defaultDeps()
-	d.stateStore = &memoryStateStore{state: domain.EmptyStoredState()}
-	d.newUsage = func(string, string) (domain.UsageSource, error) {
+	d.stateStore = &memoryStateStore{state: kimi.EmptyStoredState()}
+	d.newUsage = func(string, string) (kimi.UsageSource, error) {
 		return &fakeUsageSource{reading: syntheticReading(now)}, nil
 	}
 	d.now = func() time.Time { return now }

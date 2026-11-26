@@ -6,10 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/acevedomiguel/kimiburn/internal/cache"
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
-	"github.com/acevedomiguel/kimiburn/internal/domain"
-	"github.com/acevedomiguel/kimiburn/internal/runway"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // LiveOptions describes the production adapters without coupling the
@@ -19,9 +16,9 @@ type LiveOptions struct {
 	Interval      time.Duration
 	NoCache       bool
 	NoColor       bool
-	Store         cache.StateStore
+	Store         kimi.StateStore
 	ResolveToken  func(context.Context) (string, error)
-	NewUsage      func(baseURL, token string) (domain.UsageSource, error)
+	NewUsage      func(baseURL, token string) (kimi.UsageSource, error)
 	IsAuthFailure func(error) bool
 	Now           func() time.Time
 }
@@ -36,19 +33,19 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 		live.Now = time.Now
 	}
 	if live.Store == nil {
-		live.Store = cache.NewDisabledStore()
+		live.Store = kimi.NewDisabledStateStore()
 	}
-	state := domain.EmptyStoredState()
-	var snapshot domain.Snapshot
+	state := kimi.EmptyStoredState()
+	var snapshot kimi.Snapshot
 	warning := ""
 	if !live.NoCache {
 		loaded, err := live.Store.Load()
 		if err != nil {
-			warning = "ignored cache: " + credentials.Redact(err.Error())
+			warning = "ignored cache: " + kimi.Redact(err.Error())
 		} else {
 			state = loaded
 			if state.Samples == nil {
-				state.Samples = make(map[domain.QuotaKey][]domain.Sample)
+				state.Samples = make(map[kimi.QuotaKey][]kimi.Sample)
 			}
 			if state.Snapshot != nil {
 				snapshot = *state.Snapshot
@@ -68,7 +65,7 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 		}
 		token, err := live.ResolveToken(context.Background())
 		if err != nil {
-			return false, errors.New(credentials.Redact(err.Error()))
+			return false, errors.New(kimi.Redact(err.Error()))
 		}
 		return token != "", nil
 	}
@@ -80,7 +77,7 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 		}
 		token, err := live.ResolveToken(requestCtx)
 		if err != nil {
-			result.Err = errors.New(credentials.Redact(err.Error()))
+			result.Err = errors.New(kimi.Redact(err.Error()))
 			return result
 		}
 		if token == "" {
@@ -92,7 +89,7 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 			result.Err = errors.New("usage reader is unavailable")
 			return result
 		}
-		redactor := credentials.NewRedactor(token)
+		redactor := kimi.NewRedactor(token)
 		source, err := live.NewUsage(live.BaseURL, token)
 		if err != nil {
 			result.Err = errors.New(redactor.Redact(err.Error()))
@@ -117,22 +114,16 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 		if reading.ObservedAt.IsZero() {
 			reading.ObservedAt = live.Now()
 		}
-		result.Snapshot = NewSnapshot(reading)
+		result.Snapshot = kimi.BuildSnapshot(reading, &state)
 		mu.Lock()
 		defer mu.Unlock()
-		if state.Samples == nil {
-			state.Samples = make(map[domain.QuotaKey][]domain.Sample)
-		}
-		runway.RecordReading(state.Samples, reading)
-		result.Snapshot.Runways = runway.CalculateRunways(state.Samples, reading)
 		result.History = cloneHistory(state.Samples)
-		state.CacheVersion = domain.CacheSchemaVersion
 		state.Snapshot = &result.Snapshot
 		if live.NoCache {
 			return result
 		}
 		if err := live.Store.Save(state); err != nil {
-			result.Snapshot.Warnings = append(result.Snapshot.Warnings, domain.Warning{Section: "Cache", Message: "could not save state: " + redactor.Redact(err.Error())})
+			result.Snapshot.Warnings = append(result.Snapshot.Warnings, kimi.Warning{Section: "Cache", Message: "could not save state: " + redactor.Redact(err.Error())})
 		}
 		return result
 	}
@@ -141,10 +132,10 @@ func NewLiveModelOptions(live LiveOptions) (Options, context.CancelFunc, error) 
 
 // cloneHistory copies the sample history so the interactive model never shares
 // a slice with the refresh goroutine that keeps appending to it.
-func cloneHistory(history map[domain.QuotaKey][]domain.Sample) map[domain.QuotaKey][]domain.Sample {
-	out := make(map[domain.QuotaKey][]domain.Sample, len(history))
+func cloneHistory(history map[kimi.QuotaKey][]kimi.Sample) map[kimi.QuotaKey][]kimi.Sample {
+	out := make(map[kimi.QuotaKey][]kimi.Sample, len(history))
 	for key, samples := range history {
-		out[key] = append([]domain.Sample(nil), samples...)
+		out[key] = append([]kimi.Sample(nil), samples...)
 	}
 	return out
 }

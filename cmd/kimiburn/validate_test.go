@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/acevedomiguel/kimiburn/internal/config"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // Production setup must validate through the bounded Kimi client rather than a
@@ -165,7 +165,7 @@ func TestValidateTokenRejectsInvalidConfigurationWithoutNetwork(t *testing.T) {
 // production configuration is accepted by the allowlist.
 func TestValidateTokenAcceptsAllowedBase(t *testing.T) {
 	setupEnv(t)
-	t.Setenv("KIMIBURN_BASE_URL", config.OverseasBaseURL)
+	t.Setenv("KIMIBURN_BASE_URL", kimi.OverseasBaseURL)
 
 	// The client is constructed successfully; the read itself is not attempted
 	// here because that would reach the real network. A canceled context proves

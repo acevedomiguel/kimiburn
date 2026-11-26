@@ -3,8 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/acevedomiguel/kimiburn/internal/config"
-	"github.com/acevedomiguel/kimiburn/internal/kimi"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // validateToken returns the production setup validator: exactly one bounded
@@ -14,11 +13,11 @@ import (
 // reported.
 func validateToken(configPath string) func(context.Context, string) error {
 	return func(ctx context.Context, token string) error {
-		paths, err := config.DefaultPaths()
+		paths, err := kimi.DefaultPaths()
 		if err != nil {
 			return err
 		}
-		cfg, err := config.Load(configPathsFor(paths, options{configPath: configPath}), environment())
+		cfg, err := kimi.LoadConfig(configPathsFor(paths, options{configPath: configPath}), environment())
 		if err != nil {
 			return err
 		}
@@ -26,17 +25,13 @@ func validateToken(configPath string) func(context.Context, string) error {
 	}
 }
 
-// readUsageOnce constructs the bounded client and performs one read. The client
+// readUsageOnce constructs the bounded source and performs one read. The source
 // owns its own retry policy; this function adds no request of its own.
 func readUsageOnce(ctx context.Context, baseURL, token, clientVersion string) error {
-	client, err := kimi.NewClient(
-		kimi.WithBaseURL(baseURL),
-		kimi.WithToken(token),
-		kimi.WithVersion(clientVersion),
-	)
+	source, err := kimi.NewSource(baseURL, token, kimi.WithVersion(clientVersion))
 	if err != nil {
 		return err
 	}
-	_, err = client.ReadUsage(ctx)
+	_, err = source.ReadUsage(ctx)
 	return err
 }

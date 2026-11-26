@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/acevedomiguel/kimiburn/internal/domain"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // FormatPercent renders a valid ratio at one decimal place. Missing and
@@ -43,7 +43,7 @@ func FormatReset(reset *time.Time, now time.Time) string {
 }
 
 // FormatRunway renders the local estimate without implying exactness.
-func FormatRunway(runway domain.RunwayEstimate, key domain.QuotaKey) string {
+func FormatRunway(runway kimi.RunwayEstimate, key kimi.QuotaKey) string {
 	switch runway.Status {
 	case "depleted":
 		return "Depleted"
@@ -66,13 +66,13 @@ func FormatRunway(runway domain.RunwayEstimate, key domain.QuotaKey) string {
 }
 
 // FormatBurn converts the canonical ratio/second burn for the panel's period.
-func FormatBurn(runway domain.RunwayEstimate, key domain.QuotaKey) string {
+func FormatBurn(runway kimi.RunwayEstimate, key kimi.QuotaKey) string {
 	if runway.BurnRatioPerSecond == nil || math.IsNaN(*runway.BurnRatioPerSecond) || math.IsInf(*runway.BurnRatioPerSecond, 0) {
 		return "Not reported"
 	}
 	factor := 8640000.0
 	unit := "%/day"
-	if key == domain.QuotaLimit5h {
+	if key == kimi.QuotaLimit5h {
 		factor, unit = 360000, "%/h"
 	}
 	value := *runway.BurnRatioPerSecond * factor
@@ -83,7 +83,7 @@ func FormatBurn(runway domain.RunwayEstimate, key domain.QuotaKey) string {
 }
 
 // FormatExhaustion renders an approximate UTC exhaustion timestamp.
-func FormatExhaustion(runway domain.RunwayEstimate) string {
+func FormatExhaustion(runway kimi.RunwayEstimate) string {
 	if runway.Status != "finite" || runway.ExhaustedAt == nil {
 		return "Not applicable"
 	}
@@ -114,7 +114,7 @@ func FormatAge(age time.Duration) string {
 }
 
 // FreshnessCaption labels live and cached data distinctly.
-func FreshnessCaption(snapshot domain.Snapshot, cached bool, now time.Time) string {
+func FreshnessCaption(snapshot kimi.Snapshot, cached bool, now time.Time) string {
 	if !cached {
 		return "Live · " + snapshot.GeneratedAt.In(now.Location()).Format("15:04:05 MST")
 	}

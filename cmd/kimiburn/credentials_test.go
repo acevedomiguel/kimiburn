@@ -10,8 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/acevedomiguel/kimiburn/internal/config"
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // cliKeyring is an in-memory keyring so CLI tests never touch the real one.
@@ -24,18 +23,18 @@ func newCLIKeyring() *cliKeyring { return &cliKeyring{values: map[string]string{
 
 func (k *cliKeyring) Get(service, user string) (string, error) {
 	if k.fail {
-		return "", credentials.ErrKeyringUnavailable
+		return "", kimi.ErrKeyringUnavailable
 	}
 	v, ok := k.values[service+"/"+user]
 	if !ok {
-		return "", credentials.ErrKeyringNotFound
+		return "", kimi.ErrKeyringNotFound
 	}
 	return v, nil
 }
 
 func (k *cliKeyring) Set(service, user, secret string) error {
 	if k.fail {
-		return credentials.ErrKeyringUnavailable
+		return kimi.ErrKeyringUnavailable
 	}
 	k.values[service+"/"+user] = secret
 	return nil
@@ -43,11 +42,11 @@ func (k *cliKeyring) Set(service, user, secret string) error {
 
 func (k *cliKeyring) Delete(service, user string) error {
 	if k.fail {
-		return credentials.ErrKeyringUnavailable
+		return kimi.ErrKeyringUnavailable
 	}
 	key := service + "/" + user
 	if _, ok := k.values[key]; !ok {
-		return credentials.ErrKeyringNotFound
+		return kimi.ErrKeyringNotFound
 	}
 	delete(k.values, key)
 	return nil
@@ -62,13 +61,13 @@ func setupEnv(t *testing.T) string {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", configDir)
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
-	t.Setenv(credentials.EnvToken, "")
+	t.Setenv(kimi.TokenEnvVar, "")
 	t.Setenv("KIMIBURN_KEYRING", "")
 	return filepath.Join(configDir, "kimiburn")
 }
 
 // testDeps builds injectable CLI dependencies for setup/logout tests.
-func testDeps(validate func(context.Context, string) error, kr credentials.Keyring) deps {
+func testDeps(validate func(context.Context, string) error, kr kimi.Keyring) deps {
 	return deps{
 		validate:    validate,
 		keyring:     kr,
@@ -148,7 +147,7 @@ func TestSetupValidatesBeforeStorageAndRedactsFailure(t *testing.T) {
 func TestSetupExplainsEnvironmentTokenWithoutPersisting(t *testing.T) {
 	setupEnv(t)
 	kr := newCLIKeyring()
-	t.Setenv(credentials.EnvToken, "env-token")
+	t.Setenv(kimi.TokenEnvVar, "env-token")
 	d := testDeps(func(context.Context, string) error {
 		t.Error("an environment token must not be validated or stored")
 		return nil
@@ -205,7 +204,7 @@ func TestSetupFallsBackToRestrictedFileWhenKeyringDisabled(t *testing.T) {
 	}
 	// Windows synthesises file modes, so the POSIX bits are asserted only where
 	// the OS enforces them; there the 0700 directory carries the protection.
-	if credentials.PermissionsAreEnforced {
+	if kimi.PermissionsAreEnforced {
 		info, err := os.Stat(path)
 		if err != nil {
 			t.Fatalf("fallback file: %v", err)
@@ -226,7 +225,7 @@ func TestSetupFallsBackToRestrictedFileWhenKeyringDisabled(t *testing.T) {
 // A pre-existing group/world-readable fallback file must be refused before it
 // is read, so a loose token never becomes usable.
 func TestResolutionRefusesLooseTokenFileBeforeReading(t *testing.T) {
-	if !credentials.PermissionsAreEnforced {
+	if !kimi.PermissionsAreEnforced {
 		t.Skip("POSIX permission bits are not enforced on this platform")
 	}
 	configDir := setupEnv(t)
@@ -237,11 +236,11 @@ func TestResolutionRefusesLooseTokenFileBeforeReading(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := testDeps(nil, nil)
-	store, err := storeFor(config.Paths{ConfigDir: configDir}, options{}, d)
+	store, err := storeFor(kimi.Paths{ConfigDir: configDir}, options{}, d)
 	if err != nil {
 		t.Fatalf("storeFor: %v", err)
 	}
-	if _, err := store.Resolve(context.Background()); !errors.Is(err, credentials.ErrInsecurePermissions) {
+	if _, err := store.Resolve(context.Background()); !errors.Is(err, kimi.ErrInsecurePermissions) {
 		t.Fatalf("resolve err = %v, want ErrInsecurePermissions", err)
 	}
 }
@@ -312,7 +311,7 @@ func TestLogoutRemovesOnlyKimiburnCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Assert against the real resolved cache location, not a guess.
-	paths, err := config.DefaultPaths()
+	paths, err := kimi.DefaultPaths()
 	if err != nil {
 		t.Fatalf("DefaultPaths: %v", err)
 	}
@@ -409,7 +408,7 @@ func TestSetupEarlyConfigErrorRedactsExactEnvironmentToken(t *testing.T) {
 	// The invalid base_url is itself the exact environment token, so a
 	// generic-only redactor would echo it back in the config diagnostic.
 	t.Setenv("KIMIBURN_BASE_URL", cliExactToken)
-	t.Setenv(credentials.EnvToken, cliExactToken)
+	t.Setenv(kimi.TokenEnvVar, cliExactToken)
 	kr := newCLIKeyring()
 	d := testDeps(func(context.Context, string) error {
 		t.Error("setup must not validate when configuration is invalid")
@@ -526,7 +525,7 @@ func TestLogoutRemovesCredentialsWithKeyringDisabled(t *testing.T) {
 func TestLogoutIgnoresInvalidConfigAndDoesNotLeakToken(t *testing.T) {
 	configDir := setupEnv(t)
 	t.Setenv("KIMIBURN_BASE_URL", cliExactToken)
-	t.Setenv(credentials.EnvToken, cliExactToken)
+	t.Setenv(kimi.TokenEnvVar, cliExactToken)
 	kr := newCLIKeyring()
 	if err := kr.Set("kimiburn", "token", "stored"); err != nil {
 		t.Fatal(err)

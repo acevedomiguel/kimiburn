@@ -11,8 +11,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"github.com/acevedomiguel/kimiburn/internal/config"
-	"github.com/acevedomiguel/kimiburn/internal/credentials"
+	"github.com/acevedomiguel/burnblocks/kimi"
 )
 
 // isTerminal reports whether r is an interactive terminal.
@@ -50,7 +49,7 @@ func setupWelcome() string {
 
 // doSetup stores the Kimi Code token after validating it with one live read.
 // The token is never echoed and never printed.
-func doSetup(paths config.Paths, opts options, stdin io.Reader, stdout, stderr io.Writer, d deps) int {
+func doSetup(paths kimi.Paths, opts options, stdin io.Reader, stdout, stderr io.Writer, d deps) int {
 	fmt.Fprint(stdout, setupWelcome())
 	store, err := storeFor(paths, opts, d)
 	if err != nil {
@@ -78,7 +77,7 @@ func doSetup(paths config.Paths, opts options, stdin io.Reader, stdout, stderr i
 
 	// Redact the entered token, plus any environment token, from everything
 	// this command can print.
-	redactor := credentials.NewRedactor(store.EnvironmentToken(), token)
+	redactor := kimi.NewRedactor(store.EnvironmentToken(), token)
 
 	if d.validate == nil {
 		fmt.Fprintln(stderr, "kimiburn: token validation is unavailable in this build; nothing was saved.")
