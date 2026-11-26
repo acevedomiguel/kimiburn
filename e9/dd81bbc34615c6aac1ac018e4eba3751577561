@@ -1,0 +1,23 @@
+cmd/kimiburn/engine.go
+  s_58b6f55c0833f4::t_25ca7c7161ddd2 1-32
+cmd/kimiburn/main.go
+  s_58b6f55c0833f4::t_d92bd6aff9fff9 237-238
+cmd/kimiburn/main_test.go
+  s_58b6f55c0833f4::t_5f1496f0b75d27 217-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "e9dd81bbc34615c6aac1ac018e4eba3751577561",
+  "prompts": {},
+  "sessions": {
+    "s_58b6f55c0833f4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_de8e37bb1ffeg7g6B9LpPtCNn5",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "human_author": "Miguel Angel Acevedo <acevedomiguel@gmail.com>"
+    }
+  }
+}
