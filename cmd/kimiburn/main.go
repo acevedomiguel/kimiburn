@@ -234,5 +234,6 @@ func printUsage(w io.Writer) {
 		"  --version                 Print version and exit\n"+
 		"  --help, -h                Print this help and exit\n"+
 		"\nExit codes:\n"+
-		"  0 success   1 runtime or API failure   2 usage error   3 missing credentials\n")
+		"  0 success   1 runtime or API failure   2 usage error   3 missing credentials\n"+
+		"\nEngine: "+engineModule+" "+engineVersion()+"\n")
 }
