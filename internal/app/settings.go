@@ -153,11 +153,34 @@ func (m Model) handleTokenInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.tokenInput = string(runes[:len(runes)-1])
 		}
 		return m, nil
-	case msg.Text != "" && len(m.tokenInput)+len(msg.Text) <= maxTokenInputLength:
-		m.tokenInput += msg.Text
-		return m, nil
+	case msg.Text != "":
+		return m.appendTokenInput(msg.Text), nil
 	}
 	return m, nil
+}
+
+// handlePaste routes a bracketed paste. Only an active Settings token entry
+// accepts it, so pasted text can never trigger a dashboard or overlay action
+// elsewhere. The pasted token is kept hidden and bounded exactly like typing.
+func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
+	if m.state == ViewSettings && m.tokenEditing {
+		m = m.appendTokenInput(msg.Content)
+	}
+	return m, nil
+}
+
+// appendTokenInput adds text to the hidden token buffer, up to
+// maxTokenInputLength. A paste that would overflow the buffer is refused whole
+// rather than truncated, so a credential is never silently shortened.
+func (m Model) appendTokenInput(text string) Model {
+	if text == "" {
+		return m
+	}
+	if len([]rune(m.tokenInput))+len([]rune(text)) > maxTokenInputLength {
+		return m
+	}
+	m.tokenInput += text
+	return m
 }
 
 // changeInterval moves the interval selection by delta and applies it. The

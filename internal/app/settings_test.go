@@ -47,6 +47,13 @@ func typeKeys(m Model, text string) Model {
 	return m
 }
 
+// paste delivers a bracketed-paste message the way a terminal does, exercising
+// the same path as a real Cmd+V.
+func paste(m Model, text string) Model {
+	updated, _ := m.Update(tea.PasteMsg{Content: text})
+	return updated.(Model)
+}
+
 func openSettingsForTest(t *testing.T, m Model) Model {
 	t.Helper()
 	m, _ = press(m, tea.KeyPressMsg{Code: 's', Text: "s"})
@@ -298,6 +305,85 @@ func TestSettingsTokenSaveClearsSuspensionAndForcesRefresh(t *testing.T) {
 	}
 	if m.savedState != ViewReady {
 		t.Fatalf("savedState = %v, want ViewReady after a token is stored", m.savedState)
+	}
+}
+
+func TestSettingsTokenPasteAcceptsContentAndHidesIt(t *testing.T) {
+	var validated, stored string
+	const token = "km_synthetic_pasted_token"
+	m := settingsModel(Options{
+		ValidateToken: func(_ context.Context, got string) error { validated = got; return nil },
+		SaveToken:     func(_ context.Context, got string) error { stored = got; return nil },
+	})
+	m = openSettingsForTest(t, m)
+	m, _ = press(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	m, _ = press(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !m.tokenEditing {
+		t.Fatal("enter on the token row did not start editing")
+	}
+
+	// A paste containing the overlay's own letters must be token content, not
+	// commands, and it must never appear in the rendered view.
+	m = paste(m, token)
+	if m.tokenInput != token {
+		t.Fatalf("tokenInput = %q, want the pasted token", m.tokenInput)
+	}
+	if m.state != ViewSettings || !m.tokenEditing {
+		t.Fatalf("state=%v editing=%v, want the overlay still editing", m.state, m.tokenEditing)
+	}
+	if view := m.View().Content; strings.Contains(view, token) {
+		t.Fatalf("the pasted token appeared in the view:\n%s", view)
+	}
+	if bullets := strings.Repeat("•", len([]rune(token))); !strings.Contains(m.View().Content, bullets) {
+		t.Fatalf("the hidden input did not render %d bullets", len([]rune(token)))
+	}
+
+	m, cmd := press(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("submitting the pasted token returned no command")
+	}
+	if !m.tokenSaving || m.tokenInput != "" {
+		t.Fatalf("saving=%v tokenInput=%q", m.tokenSaving, m.tokenInput)
+	}
+	updated, _ := m.Update(cmd())
+	m = updated.(Model)
+	if validated != token || stored != token {
+		t.Fatalf("validated=%q stored=%q, want the pasted token", validated, stored)
+	}
+}
+
+func TestSettingsTokenPasteIsIgnoredOutsideEditing(t *testing.T) {
+	// On the dashboard a paste changes nothing.
+	m := settingsModel(Options{})
+	m = paste(m, "km_synthetic_token")
+	if m.tokenInput != "" {
+		t.Fatalf("a dashboard paste was captured: %q", m.tokenInput)
+	}
+
+	// Inside the overlay, before token entry starts, a paste is still ignored.
+	m = openSettingsForTest(t, m)
+	m = paste(m, "km_synthetic_token")
+	if m.tokenEditing || m.tokenInput != "" {
+		t.Fatalf("editing=%v tokenInput=%q, want a paste ignored", m.tokenEditing, m.tokenInput)
+	}
+}
+
+func TestSettingsTokenPasteOverLimitIsRefusedWhole(t *testing.T) {
+	m := settingsModel(Options{
+		ValidateToken: func(context.Context, string) error { return nil },
+		SaveToken:     func(context.Context, string) error { return nil },
+	})
+	m = openSettingsForTest(t, m)
+	m, _ = press(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	m, _ = press(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	m = paste(m, strings.Repeat("a", maxTokenInputLength))
+	if len([]rune(m.tokenInput)) != maxTokenInputLength {
+		t.Fatalf("a full-length paste was not accepted: %d", len([]rune(m.tokenInput)))
+	}
+	m = paste(m, "b")
+	if len([]rune(m.tokenInput)) != maxTokenInputLength {
+		t.Fatalf("a paste past the limit was not refused: %d", len([]rune(m.tokenInput)))
 	}
 }
 

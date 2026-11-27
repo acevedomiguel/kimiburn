@@ -112,10 +112,11 @@ keyring is unavailable, a permission-restricted fallback file is used. For a
 non-interactive process, set `KIMIBURN_TOKEN` in its environment.
 
 Replace the token later without leaving the dashboard: press `s` to open
-Settings, choose **Update token**, and enter the new token. It is hidden as you
-type, checked with one usage read, and saved only after that read succeeds; the
-previous token stays in place otherwise. When `KIMIBURN_TOKEN` is set it wins,
-so the overlay explains that it must be unset before a token can be stored here.
+Settings, choose **Update token**, and type or paste the new token. It is hidden
+as you enter it, checked with one usage read, and saved only after that read
+succeeds; the previous token stays in place otherwise. When `KIMIBURN_TOKEN` is
+set it wins, so the overlay explains that it must be unset before a token can be
+stored here.
 
 ```sh
 printf '%s\n' "$KIMIBURN_TOKEN" | kimiburn setup
