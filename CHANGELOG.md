@@ -1,3 +1,9 @@
+## [1.5.1](https://github.com/acevedomiguel/kimiburn/compare/v1.5.0...v1.5.1) (2026-11-27)
+
+### Bug Fixes
+
+* support pasted tokens in settings ([#13](https://github.com/acevedomiguel/kimiburn/issues/13)) ([7b87b93](https://github.com/acevedomiguel/kimiburn/commit/7b87b930c795de456f654c21d7528dc44d000842))
+
 ## [1.5.0](https://github.com/acevedomiguel/kimiburn/compare/v1.4.0...v1.5.0) (2026-11-26)
 
 ### Features
